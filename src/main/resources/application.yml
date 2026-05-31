@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: ai-resume
+  profiles:
+    active: local
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+
+airesume:
+  llm:
+    deepseek:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY:}
+      model: deepseek-chat
+      timeout: 30s
