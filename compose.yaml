@@ -30,7 +30,7 @@ services:
     restart: unless-stopped
     ports:
       - "6380:6379"
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lru"]
     volumes:
       - ai-resume-redis-data:/data
     healthcheck:
