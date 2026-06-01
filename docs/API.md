@@ -777,7 +777,179 @@ REJECTED / ACCEPTED 为终态, 已终态申请不允许再次审核。
 审核时写入 reviewedBy 和 reviewedAt。
 ```
 
-## 8. Actuator 接口
+## 8. AI 核心接口
+
+P3 AI 核心接口统一使用 DeepSeek Chat Completions。
+
+P3 规则:
+
+```text
+严格 JSON Prompt。
+成功写业务表 + llm_call_log。
+失败只写 llm_call_log, 不写业务结果。
+credit_cost 固定为 0, AI 币扣减留到 P4。
+不保存 raw_response。
+```
+
+### 8.1 简历评分
+
+```http
+POST /api/ai/resumes/{resumeId}/score
+```
+
+权限:
+
+```text
+USER, 只能评分自己的简历
+```
+
+请求体:
+
+```json
+{
+  "targetDirection": "运维开发实习"
+}
+```
+
+成功响应 data:
+
+```json
+{
+  "id": 1,
+  "resumeId": 1,
+  "targetDirection": "运维开发实习",
+  "overallScore": 82,
+  "dimensions": [
+    {
+      "name": "项目匹配度",
+      "score": 85,
+      "comment": "项目经历与目标岗位较匹配"
+    }
+  ],
+  "suggestions": [
+    "补充 Prometheus/Grafana 监控指标截图"
+  ],
+  "llmModel": "deepseek-chat",
+  "promptTokens": 100,
+  "completionTokens": 300,
+  "totalTokens": 400,
+  "createdAt": "2026-06-01T12:00:00"
+}
+```
+
+落库:
+
+```text
+resume_score
+llm_call_log operation=RESUME_SCORE
+```
+
+### 8.2 简历优化建议
+
+```http
+POST /api/ai/resumes/{resumeId}/optimize
+```
+
+权限:
+
+```text
+USER, 只能优化自己的简历
+```
+
+请求体:
+
+```json
+{
+  "targetDirection": "运维开发实习"
+}
+```
+
+成功响应 data:
+
+```json
+{
+  "summary": "整体方向正确, 但需要强化指标化表达。",
+  "optimizedBullets": [
+    "使用 Docker Compose 搭建 MySQL/Redis 本地环境, 支撑登录态与业务数据调试。"
+  ],
+  "rewriteSuggestions": [
+    "将'了解 Redis'改为'使用 Redis 承载验证码、登录态和热点缓存'。"
+  ],
+  "llmModel": "deepseek-chat",
+  "promptTokens": 100,
+  "completionTokens": 300,
+  "totalTokens": 400,
+  "latencyMs": 1200
+}
+```
+
+说明:
+
+```text
+P3 不修改 resume.content_md。
+P3 不单独保存优化结果历史。
+只写 llm_call_log operation=RESUME_OPTIMIZE。
+```
+
+### 8.3 岗位匹配
+
+```http
+POST /api/ai/jobs/{jobId}/match
+```
+
+权限:
+
+```text
+USER, 只能使用自己的简历匹配 OPEN 岗位
+```
+
+请求体:
+
+```json
+{
+  "resumeId": 1
+}
+```
+
+成功响应 data:
+
+```json
+{
+  "id": 1,
+  "resumeId": 1,
+  "jobId": 1,
+  "matchScore": 78,
+  "strengths": [
+    "简历中有 Spring Boot 和 Redis 项目经历"
+  ],
+  "gaps": [
+    "缺少实际线上故障处理案例"
+  ],
+  "suggestions": [
+    "补充 Jenkins 或 GitOps 发布流程"
+  ],
+  "createdAt": "2026-06-01T12:00:00"
+}
+```
+
+落库:
+
+```text
+job_match
+llm_call_log operation=JOB_MATCH
+```
+
+常见失败:
+
+```text
+非本人简历: FORBIDDEN / resume does not belong to current user
+岗位不存在: BIZ_ERROR / job not found
+岗位已关闭: BIZ_ERROR / job is closed
+AI 返回非 JSON: BIZ_ERROR / ai response is not valid JSON
+AI 返回缺字段: BIZ_ERROR / ai response missing field ...
+```
+
+## 9. Actuator 接口
 
 Spring Boot Actuator 当前暴露:
 
@@ -799,9 +971,9 @@ Spring Boot Actuator 当前暴露:
 健康检查、基础信息、Prometheus 指标采集。
 ```
 
-## 9. 请求流程示例
+## 10. 请求流程示例
 
-### 9.1 登录流程
+### 10.1 登录流程
 
 ```text
 前端 GET /api/auth/captcha
@@ -814,7 +986,7 @@ Spring Boot Actuator 当前暴露:
 前端保存 token
 ```
 
-### 9.2 带 token 访问 /me
+### 10.2 带 token 访问 /me
 
 ```text
 前端 GET /api/auth/me, Header 带 Authorization
@@ -827,7 +999,7 @@ AuthController.me() 返回当前用户
 请求结束后 RefreshTokenInterceptor 清理 ThreadLocal
 ```
 
-### 9.3 未登录访问受保护接口
+### 10.3 未登录访问受保护接口
 
 ```text
 前端 GET /api/auth/me, 不带 Authorization
@@ -837,7 +1009,7 @@ AuthInterceptor 发现 UserHolder 中没有用户
 Controller 不会执行
 ```
 
-## 10. 当前种子账号
+## 11. 当前种子账号
 
 `sql/data.sql` 当前提供三个种子账号:
 

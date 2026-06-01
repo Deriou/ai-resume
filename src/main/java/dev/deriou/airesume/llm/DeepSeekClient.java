@@ -5,6 +5,8 @@ import dev.deriou.airesume.common.exception.BizException;
 import dev.deriou.airesume.llm.dto.ChatCompletionRequest;
 import dev.deriou.airesume.llm.dto.ChatCompletionResponse;
 import dev.deriou.airesume.llm.dto.ChatMessage;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,10 @@ public class DeepSeekClient {
     }
 
     public String chat(String prompt) {
+        return chatWithUsage(prompt).content();
+    }
+
+    public LlmResult chatWithUsage(String prompt) {
         if (!StringUtils.hasText(properties.apiKey())) {
             throw new BizException(ResultCode.BIZ_ERROR, "DEEPSEEK_API_KEY is not configured");
         }
@@ -34,6 +40,7 @@ public class DeepSeekClient {
                 false
         );
 
+        Instant start = Instant.now();
         try {
             ChatCompletionResponse response = restClient.post()
                     .uri("/chat/completions")
@@ -48,7 +55,8 @@ public class DeepSeekClient {
                     })
                     .body(ChatCompletionResponse.class);
 
-            return extractContent(response);
+            long latencyMs = Duration.between(start, Instant.now()).toMillis();
+            return toResult(response, latencyMs);
         } catch (BizException ex) {
             throw ex;
         } catch (RestClientException ex) {
@@ -67,5 +75,18 @@ public class DeepSeekClient {
         }
 
         return firstChoice.message().content();
+    }
+
+    private LlmResult toResult(ChatCompletionResponse response, long latencyMs) {
+        String content = extractContent(response);
+        ChatCompletionResponse.Usage usage = response.usage();
+        return new LlmResult(
+                content,
+                StringUtils.hasText(response.model()) ? response.model() : properties.model(),
+                usage != null && usage.promptTokens() != null ? usage.promptTokens() : 0,
+                usage != null && usage.completionTokens() != null ? usage.completionTokens() : 0,
+                usage != null && usage.totalTokens() != null ? usage.totalTokens() : 0,
+                latencyMs
+        );
     }
 }
