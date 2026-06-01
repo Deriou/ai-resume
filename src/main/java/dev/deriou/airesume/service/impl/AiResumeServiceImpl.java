@@ -21,18 +21,28 @@ import dev.deriou.airesume.mapper.JobMatchMapper;
 import dev.deriou.airesume.mapper.ResumeMapper;
 import dev.deriou.airesume.mapper.ResumeScoreMapper;
 import dev.deriou.airesume.service.AiResumeService;
+import dev.deriou.airesume.service.CreditService;
 import dev.deriou.airesume.service.LlmCallLogService;
 import dev.deriou.airesume.vo.JobMatchVO;
 import dev.deriou.airesume.vo.ResumeOptimizeVO;
 import dev.deriou.airesume.vo.ResumeScoreVO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class AiResumeServiceImpl implements AiResumeService {
 
+    private static final Logger log = LoggerFactory.getLogger(AiResumeServiceImpl.class);
+
     private static final String OPERATION_RESUME_SCORE = "RESUME_SCORE";
     private static final String OPERATION_RESUME_OPTIMIZE = "RESUME_OPTIMIZE";
     private static final String OPERATION_JOB_MATCH = "JOB_MATCH";
+    private static final int CREDIT_COST_RESUME_SCORE = 1;
+    private static final int CREDIT_COST_RESUME_OPTIMIZE = 2;
+    private static final int CREDIT_COST_JOB_MATCH = 1;
 
     private final ResumeMapper resumeMapper;
     private final JobMapper jobMapper;
@@ -43,6 +53,8 @@ public class AiResumeServiceImpl implements AiResumeService {
     private final LlmJsonParser llmJsonParser;
     private final LlmCallLogService llmCallLogService;
     private final LlmProperties llmProperties;
+    private final CreditService creditService;
+    private final TransactionTemplate transactionTemplate;
 
     public AiResumeServiceImpl(
             ResumeMapper resumeMapper,
@@ -53,7 +65,9 @@ public class AiResumeServiceImpl implements AiResumeService {
             PromptBuilder promptBuilder,
             LlmJsonParser llmJsonParser,
             LlmCallLogService llmCallLogService,
-            LlmProperties llmProperties
+            LlmProperties llmProperties,
+            CreditService creditService,
+            PlatformTransactionManager transactionManager
     ) {
         this.resumeMapper = resumeMapper;
         this.jobMapper = jobMapper;
@@ -64,6 +78,8 @@ public class AiResumeServiceImpl implements AiResumeService {
         this.llmJsonParser = llmJsonParser;
         this.llmCallLogService = llmCallLogService;
         this.llmProperties = llmProperties;
+        this.creditService = creditService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -72,41 +88,55 @@ public class AiResumeServiceImpl implements AiResumeService {
         Resume resume = requireOwnResume(resumeId, user.userId());
         String targetDirection = request.targetDirection().trim();
         String prompt = promptBuilder.buildResumeScorePrompt(resume, targetDirection);
+        creditService.ensureSufficient(user.userId(), CREDIT_COST_RESUME_SCORE);
 
         LlmResult result = null;
         try {
             result = deepSeekClient.chatWithUsage(prompt);
             LlmJsonParser.ParsedResumeScore parsed = llmJsonParser.parseResumeScore(result.content());
+            LlmResult successResult = result;
 
-            ResumeScore score = new ResumeScore();
-            score.setResumeId(resume.getId());
-            score.setTargetDirection(targetDirection);
-            score.setOverallScore(parsed.overallScore());
-            score.setDimensionsJson(llmJsonParser.toJson(parsed.dimensions()));
-            score.setSuggestions(llmJsonParser.toJson(parsed.suggestions()));
-            score.setLlmModel(result.model());
-            score.setPromptTokens(result.promptTokens());
-            score.setCompletionTokens(result.completionTokens());
-            score.setTotalTokens(result.totalTokens());
-            resumeScoreMapper.insert(score);
+            return transactionTemplate.execute(status -> {
+                ResumeScore score = new ResumeScore();
+                score.setResumeId(resume.getId());
+                score.setTargetDirection(targetDirection);
+                score.setOverallScore(parsed.overallScore());
+                score.setDimensionsJson(llmJsonParser.toJson(parsed.dimensions()));
+                score.setSuggestions(llmJsonParser.toJson(parsed.suggestions()));
+                score.setLlmModel(successResult.model());
+                score.setPromptTokens(successResult.promptTokens());
+                score.setCompletionTokens(successResult.completionTokens());
+                score.setTotalTokens(successResult.totalTokens());
+                resumeScoreMapper.insert(score);
 
-            llmCallLogService.recordSuccess(user.userId(), OPERATION_RESUME_SCORE, result);
-            ResumeScore saved = resumeScoreMapper.selectById(score.getId());
-            return new ResumeScoreVO(
-                    saved.getId(),
-                    saved.getResumeId(),
-                    saved.getTargetDirection(),
-                    saved.getOverallScore(),
-                    parsed.dimensions(),
-                    parsed.suggestions(),
-                    saved.getLlmModel(),
-                    saved.getPromptTokens(),
-                    saved.getCompletionTokens(),
-                    saved.getTotalTokens(),
-                    saved.getCreatedAt()
-            );
+                Long logId = llmCallLogService.recordSuccess(user.userId(), OPERATION_RESUME_SCORE, successResult);
+                creditService.charge(
+                        user.userId(),
+                        CREDIT_COST_RESUME_SCORE,
+                        CreditService.TYPE_AI_RESUME_SCORE,
+                        CreditService.REF_TYPE_LLM_CALL_LOG,
+                        logId,
+                        "resume score"
+                );
+                llmCallLogService.updateCreditCost(logId, CREDIT_COST_RESUME_SCORE);
+
+                ResumeScore saved = resumeScoreMapper.selectById(score.getId());
+                return new ResumeScoreVO(
+                        saved.getId(),
+                        saved.getResumeId(),
+                        saved.getTargetDirection(),
+                        saved.getOverallScore(),
+                        parsed.dimensions(),
+                        parsed.suggestions(),
+                        saved.getLlmModel(),
+                        saved.getPromptTokens(),
+                        saved.getCompletionTokens(),
+                        saved.getTotalTokens(),
+                        saved.getCreatedAt()
+                );
+            });
         } catch (RuntimeException ex) {
-            llmCallLogService.recordFailure(user.userId(), OPERATION_RESUME_SCORE, llmProperties.model(), result, ex);
+            safeRecordFailure(user.userId(), OPERATION_RESUME_SCORE, result, ex);
             throw ex;
         }
     }
@@ -117,24 +147,38 @@ public class AiResumeServiceImpl implements AiResumeService {
         Resume resume = requireOwnResume(resumeId, user.userId());
         String targetDirection = request.targetDirection().trim();
         String prompt = promptBuilder.buildResumeOptimizePrompt(resume, targetDirection);
+        creditService.ensureSufficient(user.userId(), CREDIT_COST_RESUME_OPTIMIZE);
 
         LlmResult result = null;
         try {
             result = deepSeekClient.chatWithUsage(prompt);
             LlmJsonParser.ParsedResumeOptimize parsed = llmJsonParser.parseResumeOptimize(result.content());
-            llmCallLogService.recordSuccess(user.userId(), OPERATION_RESUME_OPTIMIZE, result);
-            return new ResumeOptimizeVO(
-                    parsed.summary(),
-                    parsed.optimizedBullets(),
-                    parsed.rewriteSuggestions(),
-                    result.model(),
-                    result.promptTokens(),
-                    result.completionTokens(),
-                    result.totalTokens(),
-                    result.latencyMs()
-            );
+            LlmResult successResult = result;
+
+            return transactionTemplate.execute(status -> {
+                Long logId = llmCallLogService.recordSuccess(user.userId(), OPERATION_RESUME_OPTIMIZE, successResult);
+                creditService.charge(
+                        user.userId(),
+                        CREDIT_COST_RESUME_OPTIMIZE,
+                        CreditService.TYPE_AI_RESUME_OPTIMIZE,
+                        CreditService.REF_TYPE_LLM_CALL_LOG,
+                        logId,
+                        "resume optimize"
+                );
+                llmCallLogService.updateCreditCost(logId, CREDIT_COST_RESUME_OPTIMIZE);
+                return new ResumeOptimizeVO(
+                        parsed.summary(),
+                        parsed.optimizedBullets(),
+                        parsed.rewriteSuggestions(),
+                        successResult.model(),
+                        successResult.promptTokens(),
+                        successResult.completionTokens(),
+                        successResult.totalTokens(),
+                        successResult.latencyMs()
+                );
+            });
         } catch (RuntimeException ex) {
-            llmCallLogService.recordFailure(user.userId(), OPERATION_RESUME_OPTIMIZE, llmProperties.model(), result, ex);
+            safeRecordFailure(user.userId(), OPERATION_RESUME_OPTIMIZE, result, ex);
             throw ex;
         }
     }
@@ -145,36 +189,58 @@ public class AiResumeServiceImpl implements AiResumeService {
         Resume resume = requireOwnResume(request.resumeId(), user.userId());
         Job job = requireOpenJob(jobId);
         String prompt = promptBuilder.buildJobMatchPrompt(resume, job);
+        creditService.ensureSufficient(user.userId(), CREDIT_COST_JOB_MATCH);
 
         LlmResult result = null;
         try {
             result = deepSeekClient.chatWithUsage(prompt);
             LlmJsonParser.ParsedJobMatch parsed = llmJsonParser.parseJobMatch(result.content());
+            LlmResult successResult = result;
 
-            JobMatch match = new JobMatch();
-            match.setResumeId(resume.getId());
-            match.setJobId(job.getId());
-            match.setMatchScore(parsed.matchScore());
-            match.setStrengths(llmJsonParser.toJson(parsed.strengths()));
-            match.setGaps(llmJsonParser.toJson(parsed.gaps()));
-            match.setSuggestions(llmJsonParser.toJson(parsed.suggestions()));
-            jobMatchMapper.insert(match);
+            return transactionTemplate.execute(status -> {
+                JobMatch match = new JobMatch();
+                match.setResumeId(resume.getId());
+                match.setJobId(job.getId());
+                match.setMatchScore(parsed.matchScore());
+                match.setStrengths(llmJsonParser.toJson(parsed.strengths()));
+                match.setGaps(llmJsonParser.toJson(parsed.gaps()));
+                match.setSuggestions(llmJsonParser.toJson(parsed.suggestions()));
+                jobMatchMapper.insert(match);
 
-            llmCallLogService.recordSuccess(user.userId(), OPERATION_JOB_MATCH, result);
-            JobMatch saved = jobMatchMapper.selectById(match.getId());
-            return new JobMatchVO(
-                    saved.getId(),
-                    saved.getResumeId(),
-                    saved.getJobId(),
-                    saved.getMatchScore(),
-                    parsed.strengths(),
-                    parsed.gaps(),
-                    parsed.suggestions(),
-                    saved.getCreatedAt()
-            );
+                Long logId = llmCallLogService.recordSuccess(user.userId(), OPERATION_JOB_MATCH, successResult);
+                creditService.charge(
+                        user.userId(),
+                        CREDIT_COST_JOB_MATCH,
+                        CreditService.TYPE_AI_JOB_MATCH,
+                        CreditService.REF_TYPE_LLM_CALL_LOG,
+                        logId,
+                        "job match"
+                );
+                llmCallLogService.updateCreditCost(logId, CREDIT_COST_JOB_MATCH);
+
+                JobMatch saved = jobMatchMapper.selectById(match.getId());
+                return new JobMatchVO(
+                        saved.getId(),
+                        saved.getResumeId(),
+                        saved.getJobId(),
+                        saved.getMatchScore(),
+                        parsed.strengths(),
+                        parsed.gaps(),
+                        parsed.suggestions(),
+                        saved.getCreatedAt()
+                );
+            });
         } catch (RuntimeException ex) {
-            llmCallLogService.recordFailure(user.userId(), OPERATION_JOB_MATCH, llmProperties.model(), result, ex);
+            safeRecordFailure(user.userId(), OPERATION_JOB_MATCH, result, ex);
             throw ex;
+        }
+    }
+
+    private void safeRecordFailure(Long userId, String operation, LlmResult result, RuntimeException ex) {
+        try {
+            llmCallLogService.recordFailure(userId, operation, llmProperties.model(), result, ex);
+        } catch (RuntimeException logEx) {
+            log.warn("failed to record llm failure log: operation={}, userId={}", operation, userId, logEx);
         }
     }
 

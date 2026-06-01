@@ -15,6 +15,7 @@ import dev.deriou.airesume.entity.Resume;
 import dev.deriou.airesume.mapper.JobApplicationMapper;
 import dev.deriou.airesume.mapper.JobMapper;
 import dev.deriou.airesume.mapper.ResumeMapper;
+import dev.deriou.airesume.service.HotDataService;
 import dev.deriou.airesume.service.JobApplicationService;
 import dev.deriou.airesume.vo.ApplicationVO;
 import dev.deriou.airesume.vo.PageVO;
@@ -40,15 +41,18 @@ public class JobApplicationServiceImpl implements JobApplicationService {
     private final JobApplicationMapper applicationMapper;
     private final ResumeMapper resumeMapper;
     private final JobMapper jobMapper;
+    private final HotDataService hotDataService;
 
     public JobApplicationServiceImpl(
             JobApplicationMapper applicationMapper,
             ResumeMapper resumeMapper,
-            JobMapper jobMapper
+            JobMapper jobMapper,
+            HotDataService hotDataService
     ) {
         this.applicationMapper = applicationMapper;
         this.resumeMapper = resumeMapper;
         this.jobMapper = jobMapper;
+        this.hotDataService = hotDataService;
     }
 
     @Override
@@ -83,6 +87,7 @@ public class JobApplicationServiceImpl implements JobApplicationService {
         } catch (DuplicateKeyException ex) {
             throw new BizException(ResultCode.BIZ_ERROR, "application already exists", ex);
         }
+        hotDataService.evictHotCaches();
         return toVO(applicationMapper.selectById(application.getId()), resume, job);
     }
 

@@ -24,11 +24,12 @@ public class LlmCallLogServiceImpl implements LlmCallLogService {
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordSuccess(Long userId, String operation, LlmResult result) {
+    @Transactional
+    public Long recordSuccess(Long userId, String operation, LlmResult result) {
         LlmCallLog log = baseLog(userId, operation, result.model(), result);
         log.setStatus(STATUS_SUCCESS);
         llmCallLogMapper.insert(log);
+        return log.getId();
     }
 
     @Override
@@ -39,6 +40,15 @@ public class LlmCallLogServiceImpl implements LlmCallLogService {
         log.setStatus(STATUS_FAILED);
         log.setErrorMessage(truncateError(ex));
         llmCallLogMapper.insert(log);
+    }
+
+    @Override
+    @Transactional
+    public void updateCreditCost(Long logId, int creditCost) {
+        LlmCallLog log = new LlmCallLog();
+        log.setId(logId);
+        log.setCreditCost(creditCost);
+        llmCallLogMapper.updateById(log);
     }
 
     private LlmCallLog baseLog(Long userId, String operation, String model, LlmResult result) {

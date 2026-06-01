@@ -11,6 +11,7 @@ import dev.deriou.airesume.dto.JobCreateRequest;
 import dev.deriou.airesume.dto.JobUpdateRequest;
 import dev.deriou.airesume.entity.Job;
 import dev.deriou.airesume.mapper.JobMapper;
+import dev.deriou.airesume.service.HotDataService;
 import dev.deriou.airesume.service.JobService;
 import dev.deriou.airesume.vo.JobVO;
 import dev.deriou.airesume.vo.PageVO;
@@ -27,9 +28,11 @@ public class JobServiceImpl implements JobService {
     public static final String STATUS_CLOSED = "CLOSED";
 
     private final JobMapper jobMapper;
+    private final HotDataService hotDataService;
 
-    public JobServiceImpl(JobMapper jobMapper) {
+    public JobServiceImpl(JobMapper jobMapper, HotDataService hotDataService) {
         this.jobMapper = jobMapper;
+        this.hotDataService = hotDataService;
     }
 
     @Override
@@ -44,6 +47,7 @@ public class JobServiceImpl implements JobService {
         job.setLocation(trimToNull(request.location()));
         job.setStatus(STATUS_OPEN);
         jobMapper.insert(job);
+        hotDataService.evictHotCaches();
         return toVO(jobMapper.selectById(job.getId()));
     }
 
@@ -104,6 +108,7 @@ public class JobServiceImpl implements JobService {
         job.setLocation(trimToNull(request.location()));
         job.setUpdatedAt(LocalDateTime.now());
         jobMapper.updateById(job);
+        hotDataService.evictHotCaches();
         return toVO(jobMapper.selectById(job.getId()));
     }
 
@@ -116,6 +121,7 @@ public class JobServiceImpl implements JobService {
         job.setStatus(STATUS_CLOSED);
         job.setUpdatedAt(LocalDateTime.now());
         jobMapper.updateById(job);
+        hotDataService.evictHotCaches();
         return toVO(jobMapper.selectById(job.getId()));
     }
 

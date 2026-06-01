@@ -161,6 +161,44 @@ creditBalance
 ```text
 保存登录态。
 每次请求带 token 时, RefreshTokenInterceptor 会刷新 TTL 到 30 分钟。
+creditBalance 仅作为登录态快照, /api/auth/me 和额度接口以 MySQL 实时余额为准。
+```
+
+### 3.3 每日签到 bitmap
+
+```text
+key: airesume:sign:{userId}:{yyyyMM}
+type: Bitmap
+offset: dayOfMonth - 1
+ttl: 不设置
+```
+
+用途:
+
+```text
+记录用户当月每日签到状态。
+签到发币凭证以 MySQL credit_transaction 为准。
+```
+
+### 3.4 首页热点缓存
+
+```text
+key: airesume:cache:hot:jobs
+type: String(JSON)
+ttl: 正常结果 5 minutes + random(0~120 seconds), 空结果 30 seconds
+```
+
+```text
+key: airesume:cache:hot:companies
+type: String(JSON)
+ttl: 正常结果 5 minutes + random(0~120 seconds), 空结果 30 seconds
+```
+
+用途:
+
+```text
+缓存首页热门岗位和热门公司。
+应用启动后预热, 接口使用 Cache Aside, 写操作成功后删除缓存。
 ```
 
 ## 4. 认证接口
@@ -333,8 +371,9 @@ Authorization: Bearer {token}
 请求先经过 RefreshTokenInterceptor
 RefreshTokenInterceptor 根据 token 从 Redis 恢复 LoginUser
 AuthInterceptor 判断 UserHolder 中存在用户后放行
-Controller 从 UserHolder 读取当前用户
-返回当前用户信息
+Controller 从 UserHolder 读取 userId
+查询 MySQL app_user 获取实时 creditBalance
+返回当前用户信息和最新余额
 ```
 
 响应 data:
@@ -779,16 +818,26 @@ REJECTED / ACCEPTED 为终态, 已终态申请不允许再次审核。
 
 ## 8. AI 核心接口
 
-P3 AI 核心接口统一使用 DeepSeek Chat Completions。
+AI 核心接口统一使用 DeepSeek Chat Completions。
 
-P3 规则:
+P4 后规则:
 
 ```text
 严格 JSON Prompt。
-成功写业务表 + llm_call_log。
+AI 调用前检查 AI 币余额, 余额不足不调用 DeepSeek。
+成功写业务表 + llm_call_log + credit_transaction。
+成功后按功能固定扣费, 并更新 llm_call_log.credit_cost。
 失败只写 llm_call_log, 不写业务结果。
-credit_cost 固定为 0, AI 币扣减留到 P4。
+AI 调用失败或 JSON 解析失败不扣费。
 不保存 raw_response。
+```
+
+固定扣费:
+
+```text
+RESUME_SCORE: 1
+RESUME_OPTIMIZE: 2
+JOB_MATCH: 1
 ```
 
 ### 8.1 简历评分
@@ -945,11 +994,228 @@ llm_call_log operation=JOB_MATCH
 非本人简历: FORBIDDEN / resume does not belong to current user
 岗位不存在: BIZ_ERROR / job not found
 岗位已关闭: BIZ_ERROR / job is closed
+余额不足: BIZ_ERROR / insufficient credit balance
 AI 返回非 JSON: BIZ_ERROR / ai response is not valid JSON
 AI 返回缺字段: BIZ_ERROR / ai response missing field ...
 ```
 
-## 9. Actuator 接口
+## 9. P4 额度与 Redis 强化接口
+
+### 9.1 查询 AI 币余额
+
+```http
+GET /api/credits/balance
+```
+
+权限:
+
+```text
+USER
+```
+
+响应 data:
+
+```json
+{
+  "balance": 20
+}
+```
+
+说明:
+
+```text
+余额以 MySQL app_user.credit_balance 为准。
+Redis 不保存 AI 币最终余额。
+```
+
+### 9.2 查询我的额度流水
+
+```http
+GET /api/credits/transactions?page=1&size=10
+```
+
+权限:
+
+```text
+USER
+```
+
+响应 data:
+
+```json
+{
+  "records": [
+    {
+      "id": 1,
+      "userId": 3,
+      "changeAmount": -1,
+      "type": "AI_RESUME_SCORE",
+      "balanceAfter": 19,
+      "refType": "LLM_CALL_LOG",
+      "refId": 10,
+      "remark": "resume score",
+      "createdAt": "2026-06-01T12:00:00"
+    }
+  ],
+  "page": 1,
+  "size": 10,
+  "total": 1,
+  "pages": 1
+}
+```
+
+### 9.3 今日签到状态
+
+```http
+GET /api/credits/check-in/today
+```
+
+权限:
+
+```text
+USER
+```
+
+响应 data:
+
+```json
+{
+  "checkedIn": false,
+  "date": "2026-06-01",
+  "creditReward": 1,
+  "balance": 20
+}
+```
+
+说明:
+
+```text
+优先查询 MySQL 当天 CHECK_IN 流水。
+MySQL 无流水时再查询 Redis bitmap。
+前端根据 checkedIn 展示“签到领 1 AI 币”或“今日已签到”。
+```
+
+### 9.4 签到领 AI 币
+
+```http
+POST /api/credits/check-in
+```
+
+权限:
+
+```text
+USER
+```
+
+它做:
+
+```text
+查询今天是否已有 CHECK_IN 流水。
+未签到则发放 1 AI 币。
+写 credit_transaction type=CHECK_IN。
+设置 Redis bitmap airesume:sign:{userId}:{yyyyMM} 对应日期 bit。
+返回最新余额。
+```
+
+响应 data:
+
+```json
+{
+  "checkedIn": true,
+  "date": "2026-06-01",
+  "creditReward": 1,
+  "balance": 21
+}
+```
+
+常见失败:
+
+```text
+重复签到: BIZ_ERROR / already checked in
+```
+
+### 9.5 热门岗位
+
+```http
+GET /api/hot/jobs
+```
+
+权限:
+
+```text
+登录用户
+```
+
+响应 data:
+
+```json
+[
+  {
+    "jobId": 1,
+    "title": "运维开发实习生",
+    "enterpriseId": 2,
+    "location": "杭州",
+    "techStack": "Linux,Docker,Kubernetes,Redis,Spring Boot",
+    "applicationCount": 3
+  }
+]
+```
+
+排序:
+
+```text
+只统计 OPEN 岗位。
+按投递数倒序, 再按岗位创建时间倒序。
+```
+
+缓存策略:
+
+```text
+应用启动后预热。
+接口先查 Redis, miss 再查 MySQL 并回写 Redis。
+空结果缓存 [] 30 秒。
+正常结果缓存 5 分钟 + 0~120 秒随机 TTL。
+```
+
+### 9.6 热门公司
+
+```http
+GET /api/hot/companies
+```
+
+权限:
+
+```text
+登录用户
+```
+
+响应 data:
+
+```json
+[
+  {
+    "enterpriseId": 2,
+    "enterpriseName": "演示企业",
+    "openJobCount": 2,
+    "applicationCount": 5
+  }
+]
+```
+
+排序:
+
+```text
+按收到投递数倒序, 再按开放岗位数倒序。
+```
+
+缓存失效:
+
+```text
+企业发布岗位、更新岗位、关闭岗位、用户投递成功后删除热门岗位 / 公司缓存。
+Redis 只保存热点副本, 最终数据以 MySQL 为准。
+```
+
+## 10. Actuator 接口
 
 Spring Boot Actuator 当前暴露:
 
@@ -971,9 +1237,9 @@ Spring Boot Actuator 当前暴露:
 健康检查、基础信息、Prometheus 指标采集。
 ```
 
-## 10. 请求流程示例
+## 11. 请求流程示例
 
-### 10.1 登录流程
+### 11.1 登录流程
 
 ```text
 前端 GET /api/auth/captcha
@@ -986,7 +1252,7 @@ Spring Boot Actuator 当前暴露:
 前端保存 token
 ```
 
-### 10.2 带 token 访问 /me
+### 11.2 带 token 访问 /me
 
 ```text
 前端 GET /api/auth/me, Header 带 Authorization
@@ -999,7 +1265,7 @@ AuthController.me() 返回当前用户
 请求结束后 RefreshTokenInterceptor 清理 ThreadLocal
 ```
 
-### 10.3 未登录访问受保护接口
+### 11.3 未登录访问受保护接口
 
 ```text
 前端 GET /api/auth/me, 不带 Authorization
@@ -1009,7 +1275,7 @@ AuthInterceptor 发现 UserHolder 中没有用户
 Controller 不会执行
 ```
 
-## 11. 当前种子账号
+## 12. 当前种子账号
 
 `sql/data.sql` 当前提供三个种子账号:
 

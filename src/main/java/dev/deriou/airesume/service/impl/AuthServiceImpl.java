@@ -95,15 +95,19 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse me() {
-        LoginUser user = UserHolder.current()
+        LoginUser loginUser = UserHolder.current()
                 .orElseThrow(() -> new BizException(ResultCode.UNAUTHORIZED));
+        User user = userMapper.selectById(loginUser.userId());
+        if (user == null) {
+            throw new BizException(ResultCode.UNAUTHORIZED);
+        }
         return new LoginResponse(
-                user.token(),
-                user.userId(),
-                user.username(),
-                user.role(),
-                user.nickName(),
-                user.creditBalance()
+                loginUser.token(),
+                user.getId(),
+                user.getUsername(),
+                user.getRole(),
+                user.getNickName(),
+                user.getCreditBalance()
         );
     }
 
