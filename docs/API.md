@@ -1215,7 +1215,285 @@ GET /api/hot/companies
 Redis 只保存热点副本, 最终数据以 MySQL 为准。
 ```
 
-## 10. Actuator 接口
+## 10. P4.5 管理员接口
+
+P4.5 管理员接口统一要求:
+
+```text
+role = ADMIN
+```
+
+说明:
+
+```text
+统计接口固定统计近 7 日数据。
+管理员发放 AI 币只允许发给 USER 账号。
+岗位和投递管理接口只读, 不做管理员强制审核或删除。
+```
+
+### 10.1 管理员业务概览
+
+```http
+GET /api/admin/overview
+```
+
+响应 data:
+
+```json
+{
+  "totalUsers": 3,
+  "userCount": 1,
+  "enterpriseCount": 1,
+  "adminCount": 1,
+  "resumeCount": 10,
+  "jobCount": 8,
+  "openJobCount": 6,
+  "applicationCount": 12,
+  "todayAiCalls": 5,
+  "todayTokens": 12000,
+  "todayCreditCost": 7,
+  "todayAvgLatencyMs": 1300,
+  "todayAiFailures": 1
+}
+```
+
+### 10.2 LLM 统计
+
+```http
+GET /api/admin/llm/summary
+GET /api/admin/llm/daily
+GET /api/admin/llm/operations
+```
+
+`summary` 响应 data:
+
+```json
+{
+  "days": 7,
+  "callCount": 10,
+  "successCount": 9,
+  "failureCount": 1,
+  "failureRate": 0.1,
+  "promptTokens": 2000,
+  "completionTokens": 6000,
+  "totalTokens": 8000,
+  "avgLatencyMs": 1200,
+  "creditCost": 12
+}
+```
+
+`daily` 返回近 7 日数组:
+
+```json
+[
+  {
+    "date": "2026-06-01",
+    "callCount": 3,
+    "successCount": 3,
+    "failureCount": 0,
+    "totalTokens": 2400,
+    "creditCost": 4,
+    "avgLatencyMs": 1100
+  }
+]
+```
+
+`operations` 按功能聚合:
+
+```json
+[
+  {
+    "operation": "RESUME_SCORE",
+    "callCount": 4,
+    "totalTokens": 3200,
+    "creditCost": 4,
+    "avgLatencyMs": 1000
+  }
+]
+```
+
+### 10.3 AI 币统计
+
+```http
+GET /api/admin/credits/summary
+GET /api/admin/credits/daily
+GET /api/admin/credits/top-users?limit=5
+```
+
+`summary` 响应 data:
+
+```json
+{
+  "days": 7,
+  "grantedCredits": 20,
+  "consumedCredits": 12,
+  "checkInCredits": 3,
+  "adminGrantCredits": 17,
+  "resumeScoreCredits": 4,
+  "resumeOptimizeCredits": 6,
+  "jobMatchCredits": 2
+}
+```
+
+`daily` 返回近 7 日数组:
+
+```json
+[
+  {
+    "date": "2026-06-01",
+    "grantedCredits": 5,
+    "consumedCredits": 3,
+    "checkInCredits": 1,
+    "adminGrantCredits": 4,
+    "aiConsumedCredits": 3
+  }
+]
+```
+
+`top-users` 返回 AI 币消耗 TOP 用户, 同时带 LLM token 和调用次数:
+
+```json
+[
+  {
+    "userId": 3,
+    "username": "user",
+    "nickName": "演示求职者",
+    "consumedCredits": 8,
+    "totalTokens": 5000,
+    "aiCallCount": 6
+  }
+]
+```
+
+### 10.4 管理员用户列表
+
+```http
+GET /api/admin/users?page=1&size=10&role=USER&status=ACTIVE&keyword=user
+```
+
+过滤条件:
+
+```text
+role 可选: USER / ENTERPRISE / ADMIN
+status 可选: ACTIVE / DISABLED
+keyword 可选: 匹配 username / nickName
+```
+
+响应 data:
+
+```json
+{
+  "records": [
+    {
+      "id": 3,
+      "username": "user",
+      "role": "USER",
+      "nickName": "演示求职者",
+      "creditBalance": 20,
+      "status": "ACTIVE",
+      "createdAt": "2026-06-01T12:00:00",
+      "updatedAt": "2026-06-01T12:00:00"
+    }
+  ],
+  "page": 1,
+  "size": 10,
+  "total": 1,
+  "pages": 1
+}
+```
+
+### 10.5 管理员发放 AI 币
+
+```http
+POST /api/admin/users/{userId}/credits/grant
+```
+
+请求体:
+
+```json
+{
+  "amount": 10,
+  "remark": "演示环境补充额度"
+}
+```
+
+规则:
+
+```text
+只能 ADMIN 调用。
+目标账号必须是 USER。
+写 credit_transaction.type = ADMIN_GRANT。
+```
+
+响应 data 为本次额度流水:
+
+```json
+{
+  "id": 10,
+  "userId": 3,
+  "changeAmount": 10,
+  "type": "ADMIN_GRANT",
+  "balanceAfter": 30,
+  "refType": "ADMIN_GRANT",
+  "refId": null,
+  "remark": "演示环境补充额度",
+  "createdAt": "2026-06-01T12:00:00"
+}
+```
+
+### 10.6 管理员岗位只读列表
+
+```http
+GET /api/admin/jobs?page=1&size=10&status=OPEN&keyword=运维
+```
+
+响应 records:
+
+```json
+{
+  "id": 1,
+  "enterpriseId": 2,
+  "enterpriseName": "演示企业",
+  "title": "运维开发实习生",
+  "techStack": "Linux,Docker,Kubernetes,Redis,Spring Boot",
+  "location": "杭州",
+  "status": "OPEN",
+  "applicationCount": 3,
+  "createdAt": "2026-06-01T12:00:00",
+  "updatedAt": "2026-06-01T12:00:00"
+}
+```
+
+### 10.7 管理员投递只读列表
+
+```http
+GET /api/admin/applications?page=1&size=10&status=PENDING
+```
+
+响应 records:
+
+```json
+{
+  "id": 1,
+  "userId": 3,
+  "username": "user",
+  "nickName": "演示求职者",
+  "resumeId": 1,
+  "resumeTitle": "运维开发实习简历",
+  "jobId": 1,
+  "jobTitle": "运维开发实习生",
+  "enterpriseId": 2,
+  "enterpriseName": "演示企业",
+  "status": "PENDING",
+  "remark": "希望参与云原生和自动化方向实习。",
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "createdAt": "2026-06-01T12:00:00",
+  "updatedAt": "2026-06-01T12:00:00"
+}
+```
+
+## 11. Actuator 接口
 
 Spring Boot Actuator 当前暴露:
 
@@ -1237,9 +1515,9 @@ Spring Boot Actuator 当前暴露:
 健康检查、基础信息、Prometheus 指标采集。
 ```
 
-## 11. 请求流程示例
+## 12. 请求流程示例
 
-### 11.1 登录流程
+### 12.1 登录流程
 
 ```text
 前端 GET /api/auth/captcha
@@ -1252,7 +1530,7 @@ Spring Boot Actuator 当前暴露:
 前端保存 token
 ```
 
-### 11.2 带 token 访问 /me
+### 12.2 带 token 访问 /me
 
 ```text
 前端 GET /api/auth/me, Header 带 Authorization
@@ -1265,7 +1543,7 @@ AuthController.me() 返回当前用户
 请求结束后 RefreshTokenInterceptor 清理 ThreadLocal
 ```
 
-### 11.3 未登录访问受保护接口
+### 12.3 未登录访问受保护接口
 
 ```text
 前端 GET /api/auth/me, 不带 Authorization
@@ -1275,7 +1553,7 @@ AuthInterceptor 发现 UserHolder 中没有用户
 Controller 不会执行
 ```
 
-## 12. 当前种子账号
+## 13. 当前种子账号
 
 `sql/data.sql` 当前提供三个种子账号:
 
