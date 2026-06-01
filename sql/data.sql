@@ -21,10 +21,22 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO job (id, enterprise_id, title, jd_content, tech_stack, location, status)
 VALUES
-  (1, 2, '运维开发实习生', '负责内部平台自动化、监控告警、CI/CD 与基础设施脚本开发。', 'Linux,Docker,Kubernetes,Redis,Spring Boot', '杭州', 'OPEN')
+  (1, 2, '运维开发实习生', '负责内部平台自动化、监控告警、CI/CD 与基础设施脚本开发。', 'Linux,Docker,Kubernetes,Redis,Spring Boot', '杭州', 'OPEN'),
+  (2, 2, 'Java 后端实习生', '参与 Spring Boot 业务接口开发、MySQL 表设计、Redis 缓存治理和接口联调。', 'Java,Spring Boot,MySQL,Redis', '上海', 'OPEN'),
+  (3, 2, '平台工程实习生', '参与内部 DevOps 平台、Kubernetes 发布流程和监控告警体系建设。', 'Kubernetes,Jenkins,Prometheus,Grafana', '远程', 'CLOSED')
 ON DUPLICATE KEY UPDATE
   title = VALUES(title),
   jd_content = VALUES(jd_content),
   tech_stack = VALUES(tech_stack),
   location = VALUES(location),
   status = VALUES(status);
+
+INSERT INTO application (id, user_id, resume_id, job_id, status, remark, reviewed_by, reviewed_at)
+VALUES
+  (1, 3, 1, 1, 'PENDING', '希望参与云原生和自动化方向实习。', NULL, NULL)
+ON DUPLICATE KEY UPDATE
+  resume_id = VALUES(resume_id),
+  status = VALUES(status),
+  remark = VALUES(remark),
+  reviewed_by = VALUES(reviewed_by),
+  reviewed_at = VALUES(reviewed_at);

@@ -461,7 +461,323 @@ DeepSeek HTTP 错误: BIZ_ERROR / DeepSeek request failed: HTTP xxx
 DeepSeek 返回空内容: BIZ_ERROR / DeepSeek returned empty content
 ```
 
-## 7. Actuator 接口
+## 7. P2 业务接口
+
+### 7.1 分页结构
+
+P2 列表接口统一支持:
+
+```http
+?page=1&size=10
+```
+
+说明:
+
+```text
+page 默认 1
+size 默认 10
+size 最大 100
+```
+
+分页响应 data:
+
+```json
+{
+  "records": [],
+  "page": 1,
+  "size": 10,
+  "total": 0,
+  "pages": 0
+}
+```
+
+### 7.2 简历接口
+
+#### 创建简历
+
+```http
+POST /api/resumes
+```
+
+权限:
+
+```text
+USER
+```
+
+请求体:
+
+```json
+{
+  "title": "运维开发实习简历",
+  "contentMd": "熟悉 Linux、Docker、Kubernetes、Spring Boot、Redis。"
+}
+```
+
+#### 我的简历列表
+
+```http
+GET /api/resumes?page=1&size=10
+```
+
+权限:
+
+```text
+USER
+```
+
+#### 简历详情
+
+```http
+GET /api/resumes/{id}
+```
+
+权限:
+
+```text
+USER, 只能查看自己的简历
+```
+
+#### 更新简历
+
+```http
+PUT /api/resumes/{id}
+```
+
+权限:
+
+```text
+USER, 只能更新自己的简历
+```
+
+请求体同创建简历。
+
+#### 删除简历
+
+```http
+DELETE /api/resumes/{id}
+```
+
+权限:
+
+```text
+USER, 只能删除自己的简历
+```
+
+### 7.3 岗位接口
+
+#### 发布岗位
+
+```http
+POST /api/jobs
+```
+
+权限:
+
+```text
+ENTERPRISE
+```
+
+请求体:
+
+```json
+{
+  "title": "运维开发实习生",
+  "jdContent": "负责内部平台自动化、监控告警、CI/CD 与基础设施脚本开发。",
+  "techStack": "Linux,Docker,Kubernetes,Redis,Spring Boot",
+  "location": "杭州"
+}
+```
+
+#### 开放岗位列表
+
+```http
+GET /api/jobs?page=1&size=10
+```
+
+权限:
+
+```text
+登录用户
+```
+
+说明:
+
+```text
+只返回 OPEN 状态岗位。
+```
+
+#### 我的岗位列表
+
+```http
+GET /api/jobs/mine?page=1&size=10
+```
+
+权限:
+
+```text
+ENTERPRISE
+```
+
+说明:
+
+```text
+返回当前企业自己的 OPEN / CLOSED 岗位。
+```
+
+#### 岗位详情
+
+```http
+GET /api/jobs/{id}
+```
+
+权限:
+
+```text
+登录用户
+```
+
+可见性:
+
+```text
+普通用户只能查看 OPEN 岗位。
+企业可以查看自己发布的 OPEN / CLOSED 岗位。
+```
+
+#### 更新岗位
+
+```http
+PUT /api/jobs/{id}
+```
+
+权限:
+
+```text
+ENTERPRISE, 只能更新自己的岗位
+```
+
+请求体同发布岗位。
+
+#### 关闭岗位
+
+```http
+PATCH /api/jobs/{id}/close
+```
+
+权限:
+
+```text
+ENTERPRISE, 只能关闭自己的岗位
+```
+
+说明:
+
+```text
+将 status 更新为 CLOSED, 关闭后不允许继续投递。
+```
+
+### 7.4 投递接口
+
+投递状态:
+
+```text
+PENDING
+VIEWED
+REJECTED
+ACCEPTED
+```
+
+#### 发起投递
+
+```http
+POST /api/applications
+```
+
+权限:
+
+```text
+USER
+```
+
+请求体:
+
+```json
+{
+  "resumeId": 1,
+  "jobId": 1,
+  "remark": "希望参与云原生和自动化方向实习。"
+}
+```
+
+规则:
+
+```text
+只能使用自己的简历投递。
+只能投递 OPEN 岗位。
+同一用户对同一岗位只能投递一次。
+新投递状态为 PENDING。
+```
+
+#### 我的投递
+
+```http
+GET /api/applications/my?page=1&size=10
+```
+
+权限:
+
+```text
+USER
+```
+
+#### 收到的投递
+
+```http
+GET /api/applications/received?page=1&size=10
+```
+
+权限:
+
+```text
+ENTERPRISE
+```
+
+说明:
+
+```text
+只返回投递到当前企业岗位的申请。
+```
+
+#### 审核投递
+
+```http
+PATCH /api/applications/{id}/status
+```
+
+权限:
+
+```text
+ENTERPRISE, 只能审核投递到自己岗位的申请
+```
+
+请求体:
+
+```json
+{
+  "status": "ACCEPTED",
+  "remark": "简历匹配度较高，进入后续面试。"
+}
+```
+
+规则:
+
+```text
+status 只能更新为 VIEWED / REJECTED / ACCEPTED。
+REJECTED / ACCEPTED 为终态, 已终态申请不允许再次审核。
+审核时写入 reviewedBy 和 reviewedAt。
+```
+
+## 8. Actuator 接口
 
 Spring Boot Actuator 当前暴露:
 
@@ -483,9 +799,9 @@ Spring Boot Actuator 当前暴露:
 健康检查、基础信息、Prometheus 指标采集。
 ```
 
-## 8. 请求流程示例
+## 9. 请求流程示例
 
-### 8.1 登录流程
+### 9.1 登录流程
 
 ```text
 前端 GET /api/auth/captcha
@@ -498,7 +814,7 @@ Spring Boot Actuator 当前暴露:
 前端保存 token
 ```
 
-### 8.2 带 token 访问 /me
+### 9.2 带 token 访问 /me
 
 ```text
 前端 GET /api/auth/me, Header 带 Authorization
@@ -511,7 +827,7 @@ AuthController.me() 返回当前用户
 请求结束后 RefreshTokenInterceptor 清理 ThreadLocal
 ```
 
-### 8.3 未登录访问受保护接口
+### 9.3 未登录访问受保护接口
 
 ```text
 前端 GET /api/auth/me, 不带 Authorization
@@ -521,7 +837,7 @@ AuthInterceptor 发现 UserHolder 中没有用户
 Controller 不会执行
 ```
 
-## 9. 当前种子账号
+## 10. 当前种子账号
 
 `sql/data.sql` 当前提供三个种子账号:
 
