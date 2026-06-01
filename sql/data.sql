@@ -2,10 +2,12 @@ USE db_airesume;
 
 INSERT INTO app_user (id, username, phone, password_hash, role, nick_name, credit_balance, status)
 VALUES
-  (1, 'admin', NULL, '{plain}admin123', 'ADMIN', '系统管理员', 100, 'ACTIVE'),
-  (2, 'enterprise', NULL, '{plain}enterprise123', 'ENTERPRISE', '演示企业', 50, 'ACTIVE'),
-  (3, 'user', NULL, '{plain}user123', 'USER', '演示求职者', 20, 'ACTIVE')
+  (1, 'admin', NULL, '$2a$10$/Jr.s1Zgh1bYxI1eoldSn.KZKTkqSClWW3uS5Y7kbEa8JIjGCj/lm', 'ADMIN', '系统管理员', 100, 'ACTIVE'),
+  (2, 'enterprise', NULL, '$2a$10$OhiV/lP2cTgQKeVZNM7uxem.Cw7tDlX5WDF.mcg.jShcmEvctrO06', 'ENTERPRISE', '演示企业', 50, 'ACTIVE'),
+  (3, 'user', NULL, '$2a$10$TixSNbc1FAR4KkKUXdChW.VthBhCXC/EY4MjBwbSfmlFpX/1Xkaoa', 'USER', '演示求职者', 20, 'ACTIVE')
 ON DUPLICATE KEY UPDATE
+  password_hash = VALUES(password_hash),
+  role = VALUES(role),
   nick_name = VALUES(nick_name),
   credit_balance = VALUES(credit_balance),
   status = VALUES(status);
