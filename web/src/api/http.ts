@@ -46,15 +46,66 @@ http.interceptors.response.use(
     ElMessage.error(payload?.traceId ? `${message}（traceId: ${payload.traceId}）` : message)
     return Promise.reject(new Error(message))
   },
-  (error: AxiosError) => {
-    const message = error.response?.status === 413 ? '文件过大' : error.message || '网络错误'
-    ElMessage.error(message)
-    return Promise.reject(error)
+  async (error: AxiosError) => {
+    const payload = await resolveErrorPayload(error)
+    const message = payload?.message || resolveFallbackMessage(error)
+
+    if (payload?.code === 'UNAUTHORIZED' || error.response?.status === 401) {
+      clearStoredToken()
+      if (!location.pathname.startsWith('/login') && !location.pathname.startsWith('/register')) {
+        location.assign('/login')
+      }
+    }
+
+    ElMessage.error(payload?.traceId ? `${message}（traceId: ${payload.traceId}）` : message)
+    return Promise.reject(new Error(message))
   },
 )
 
 export function downloadBlob(url: string) {
   return http.get<never, Blob>(url, { responseType: 'blob' })
+}
+
+function resolveFallbackMessage(error: AxiosError): string {
+  if (error.response?.status === 413) {
+    return '文件过大'
+  }
+  if (error.response?.status) {
+    return `请求失败：HTTP ${error.response.status}`
+  }
+  return error.message || '网络错误'
+}
+
+async function resolveErrorPayload(error: AxiosError): Promise<ApiResponse<unknown> | null> {
+  const data = error.response?.data
+  if (isApiResponse(data)) {
+    return data
+  }
+  if (data instanceof Blob) {
+    return parseBlobPayload(data)
+  }
+  return null
+}
+
+async function parseBlobPayload(blob: Blob): Promise<ApiResponse<unknown> | null> {
+  if (!blob.type.includes('json')) {
+    return null
+  }
+  try {
+    const text = await blob.text()
+    const parsed: unknown = JSON.parse(text)
+    return isApiResponse(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function isApiResponse(value: unknown): value is ApiResponse<unknown> {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Partial<ApiResponse<unknown>>
+  return typeof candidate.code === 'string' && typeof candidate.message === 'string'
 }
 
 export default http
