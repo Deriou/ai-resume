@@ -553,6 +553,45 @@ USER
 }
 ```
 
+#### PDF 导入创建简历
+
+```http
+POST /api/resumes/import/pdf
+Content-Type: multipart/form-data
+```
+
+权限:
+
+```text
+USER
+```
+
+表单字段:
+
+```text
+file: PDF 文件
+title: 可选, 不填时使用 PDF 文件名
+```
+
+说明:
+
+```text
+第一版只支持可复制文字的 PDF, 不做 OCR。
+后端使用 PDFBox 提取文本, 写入 resume.content_md。
+导入成功后会自动把原 PDF 保存为该简历附件。
+导入不调用 DeepSeek, 不扣 AI 币。
+AI 评分、优化、岗位匹配仍然基于导入后的 resume.content_md。
+```
+
+常见失败:
+
+```text
+非 PDF 文件: BIZ_ERROR / only pdf import is supported
+扫描件或文本过短: BIZ_ERROR / pdf text is too short, please use a text-based PDF
+加密 PDF: BIZ_ERROR / encrypted pdf is not supported
+解析失败: BIZ_ERROR / failed to parse pdf
+```
+
 #### 我的简历列表
 
 ```http
@@ -601,6 +640,121 @@ DELETE /api/resumes/{id}
 
 ```text
 USER, 只能删除自己的简历
+如果简历下存在附件, 需要先删除附件, 否则返回 BIZ_ERROR
+```
+
+### 7.2.1 简历附件接口
+
+P4.6 普通简历附件只做上传、列表、下载、删除, 不做 PDF / DOC / DOCX 内容解析。P5 新增的 PDF 导入创建简历会解析 PDF 文本并写入 `resume.content_md`。AI 评分、优化、岗位匹配始终基于 `resume.content_md`。
+
+文件规则:
+
+```text
+支持扩展名: pdf, doc, docx
+单文件大小: 10MB
+单份简历最多附件数: 3 个
+MIME 白名单: application/pdf, application/msword,
+application/vnd.openxmlformats-officedocument.wordprocessingml.document,
+application/octet-stream
+```
+
+#### 上传附件
+
+```http
+POST /api/resumes/{resumeId}/files
+Content-Type: multipart/form-data
+```
+
+权限:
+
+```text
+USER, 只能给自己的简历上传附件
+```
+
+表单字段:
+
+```text
+file
+```
+
+响应 data:
+
+```json
+{
+  "id": 1,
+  "resumeId": 1,
+  "originalName": "谷强_运维开发实习.pdf",
+  "contentType": "application/pdf",
+  "fileSize": 1048576,
+  "fileExt": "pdf",
+  "createdAt": "2026-06-02T12:00:00"
+}
+```
+
+#### 附件列表
+
+```http
+GET /api/resumes/{resumeId}/files
+```
+
+权限:
+
+```text
+USER, 只能查看自己的简历附件
+```
+
+响应 data:
+
+```json
+[
+  {
+    "id": 1,
+    "resumeId": 1,
+    "originalName": "谷强_运维开发实习.pdf",
+    "contentType": "application/pdf",
+    "fileSize": 1048576,
+    "fileExt": "pdf",
+    "createdAt": "2026-06-02T12:00:00"
+  }
+]
+```
+
+#### 下载附件
+
+```http
+GET /api/resume-files/{fileId}/download
+```
+
+权限:
+
+```text
+USER, 只能下载自己的附件
+```
+
+说明:
+
+```text
+下载接口直接返回文件流, 不包 ApiResponse。
+响应头包含 Content-Disposition: attachment, 使用原始文件名下载。
+```
+
+#### 删除附件
+
+```http
+DELETE /api/resume-files/{fileId}
+```
+
+权限:
+
+```text
+USER, 只能删除自己的附件
+```
+
+说明:
+
+```text
+删除数据库元数据, 并尽力删除本地物理文件。
+如果物理文件已经不存在, 元数据删除仍可成功。
 ```
 
 ### 7.3 岗位接口

@@ -30,6 +30,7 @@
         <java.version>21</java.version>
         <mybatis-plus.version>3.5.16</mybatis-plus.version>
         <hutool.version>5.8.36</hutool.version>
+        <pdfbox.version>2.0.31</pdfbox.version>
     </properties>
     <dependencies>
         <dependency>
@@ -62,6 +63,11 @@
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
 
         <dependency>

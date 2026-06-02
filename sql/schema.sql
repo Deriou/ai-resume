@@ -28,6 +28,21 @@ CREATE TABLE IF NOT EXISTS resume (
   INDEX idx_resume_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS resume_file (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  resume_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  stored_name VARCHAR(255) NOT NULL,
+  storage_path VARCHAR(512) NOT NULL,
+  content_type VARCHAR(128) NULL,
+  file_size BIGINT NOT NULL,
+  file_ext VARCHAR(16) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_resume_file_resume_id (resume_id),
+  INDEX idx_resume_file_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS resume_score (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   resume_id BIGINT NOT NULL,

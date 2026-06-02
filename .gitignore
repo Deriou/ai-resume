@@ -5,6 +5,11 @@ docs-draft/
 .env.*
 !.env.example
 target/
+uploads/
+web/node_modules/
+web/dist/
+web/.vite/
+web/.DS_Store
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

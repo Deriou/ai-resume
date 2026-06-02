@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,6 +30,14 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "invalid request")
                 .orElse("invalid request");
         log.warn("MethodArgumentNotValidException: message={}", message);
+        return ResponseEntity.status(ResultCode.BIZ_ERROR.getHttpStatus())
+                .body(ApiResponse.fail(ResultCode.BIZ_ERROR, message));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
+        String message = "file size must not exceed 10MB";
+        log.warn("MaxUploadSizeExceededException: message={}", message);
         return ResponseEntity.status(ResultCode.BIZ_ERROR.getHttpStatus())
                 .body(ApiResponse.fail(ResultCode.BIZ_ERROR, message));
     }

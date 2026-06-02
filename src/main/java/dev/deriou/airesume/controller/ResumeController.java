@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/resumes")
@@ -30,6 +32,14 @@ public class ResumeController {
     @PostMapping
     public ApiResponse<ResumeVO> create(@Valid @RequestBody ResumeCreateRequest request) {
         return ApiResponse.success(resumeService.create(request));
+    }
+
+    @PostMapping(value = "/import/pdf", consumes = "multipart/form-data")
+    public ApiResponse<ResumeVO> importPdf(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(required = false) String title
+    ) {
+        return ApiResponse.success(resumeService.importPdf(file, title));
     }
 
     @GetMapping
