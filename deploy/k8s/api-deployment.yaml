@@ -25,7 +25,7 @@ spec:
             claimName: ai-resume-uploads-pvc
       containers:
         - name: ai-resume-api
-          image: crpi-ekwujpeg6f954ar3.cn-wulanchabu.personal.cr.aliyuncs.com/cloud-ops-hub/ai-resume-api:manual
+          image: crpi-ekwujpeg6f954ar3.cn-wulanchabu.personal.cr.aliyuncs.com/cloud-ops-hub/ai-resume-api:0.1.0-airesume-1-2fbb726
           ports:
             - containerPort: 8080
               name: http
