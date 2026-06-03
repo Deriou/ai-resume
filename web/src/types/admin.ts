@@ -76,6 +76,15 @@ export interface AdminJobVO {
   updatedAt: string
 }
 
+export interface AdminJobSummaryVO {
+  jobCount: number
+  openJobCount: number
+  closedJobCount: number
+  applicationCount: number
+  noApplicationJobCount: number
+  avgApplicationsPerJob: number
+}
+
 export interface AdminApplicationVO {
   id: number
   userId: number
@@ -93,6 +102,15 @@ export interface AdminApplicationVO {
   reviewedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface AdminApplicationSummaryVO {
+  applicationCount: number
+  pendingCount: number
+  viewedCount: number
+  acceptedCount: number
+  rejectedCount: number
+  reviewedRate: number
 }
 
 export interface AdminCreditGrantRequest {

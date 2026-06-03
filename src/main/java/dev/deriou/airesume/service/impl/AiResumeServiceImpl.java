@@ -2,6 +2,7 @@ package dev.deriou.airesume.service.impl;
 
 import dev.deriou.airesume.common.api.ResultCode;
 import dev.deriou.airesume.common.exception.BizException;
+import dev.deriou.airesume.common.observability.LlmMetrics;
 import dev.deriou.airesume.context.LoginUser;
 import dev.deriou.airesume.context.LoginUserSupport;
 import dev.deriou.airesume.dto.JobMatchRequest;
@@ -10,6 +11,7 @@ import dev.deriou.airesume.dto.ResumeScoreRequest;
 import dev.deriou.airesume.entity.Job;
 import dev.deriou.airesume.entity.JobMatch;
 import dev.deriou.airesume.entity.Resume;
+import dev.deriou.airesume.entity.ResumeOptimize;
 import dev.deriou.airesume.entity.ResumeScore;
 import dev.deriou.airesume.llm.DeepSeekClient;
 import dev.deriou.airesume.llm.LlmJsonParser;
@@ -19,6 +21,7 @@ import dev.deriou.airesume.llm.PromptBuilder;
 import dev.deriou.airesume.mapper.JobMapper;
 import dev.deriou.airesume.mapper.JobMatchMapper;
 import dev.deriou.airesume.mapper.ResumeMapper;
+import dev.deriou.airesume.mapper.ResumeOptimizeMapper;
 import dev.deriou.airesume.mapper.ResumeScoreMapper;
 import dev.deriou.airesume.service.AiResumeService;
 import dev.deriou.airesume.service.CreditService;
@@ -26,6 +29,7 @@ import dev.deriou.airesume.service.LlmCallLogService;
 import dev.deriou.airesume.vo.JobMatchVO;
 import dev.deriou.airesume.vo.ResumeOptimizeVO;
 import dev.deriou.airesume.vo.ResumeScoreVO;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -47,6 +51,7 @@ public class AiResumeServiceImpl implements AiResumeService {
     private final ResumeMapper resumeMapper;
     private final JobMapper jobMapper;
     private final ResumeScoreMapper resumeScoreMapper;
+    private final ResumeOptimizeMapper resumeOptimizeMapper;
     private final JobMatchMapper jobMatchMapper;
     private final DeepSeekClient deepSeekClient;
     private final PromptBuilder promptBuilder;
@@ -55,11 +60,13 @@ public class AiResumeServiceImpl implements AiResumeService {
     private final LlmProperties llmProperties;
     private final CreditService creditService;
     private final TransactionTemplate transactionTemplate;
+    private final LlmMetrics llmMetrics;
 
     public AiResumeServiceImpl(
             ResumeMapper resumeMapper,
             JobMapper jobMapper,
             ResumeScoreMapper resumeScoreMapper,
+            ResumeOptimizeMapper resumeOptimizeMapper,
             JobMatchMapper jobMatchMapper,
             DeepSeekClient deepSeekClient,
             PromptBuilder promptBuilder,
@@ -67,11 +74,13 @@ public class AiResumeServiceImpl implements AiResumeService {
             LlmCallLogService llmCallLogService,
             LlmProperties llmProperties,
             CreditService creditService,
-            PlatformTransactionManager transactionManager
+            PlatformTransactionManager transactionManager,
+            LlmMetrics llmMetrics
     ) {
         this.resumeMapper = resumeMapper;
         this.jobMapper = jobMapper;
         this.resumeScoreMapper = resumeScoreMapper;
+        this.resumeOptimizeMapper = resumeOptimizeMapper;
         this.jobMatchMapper = jobMatchMapper;
         this.deepSeekClient = deepSeekClient;
         this.promptBuilder = promptBuilder;
@@ -80,6 +89,7 @@ public class AiResumeServiceImpl implements AiResumeService {
         this.llmProperties = llmProperties;
         this.creditService = creditService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.llmMetrics = llmMetrics;
     }
 
     @Override
@@ -91,6 +101,7 @@ public class AiResumeServiceImpl implements AiResumeService {
         creditService.ensureSufficient(user.userId(), CREDIT_COST_RESUME_SCORE);
 
         LlmResult result = null;
+        long startedAt = System.nanoTime();
         try {
             result = deepSeekClient.chatWithUsage(prompt);
             LlmJsonParser.ParsedResumeScore parsed = llmJsonParser.parseResumeScore(result.content());
@@ -119,6 +130,7 @@ public class AiResumeServiceImpl implements AiResumeService {
                         "resume score"
                 );
                 llmCallLogService.updateCreditCost(logId, CREDIT_COST_RESUME_SCORE);
+                llmMetrics.recordSuccess(OPERATION_RESUME_SCORE, successResult);
 
                 ResumeScore saved = resumeScoreMapper.selectById(score.getId());
                 return new ResumeScoreVO(
@@ -137,6 +149,7 @@ public class AiResumeServiceImpl implements AiResumeService {
             });
         } catch (RuntimeException ex) {
             safeRecordFailure(user.userId(), OPERATION_RESUME_SCORE, result, ex);
+            llmMetrics.recordFailure(OPERATION_RESUME_SCORE, failureModel(result), failureLatencyMs(startedAt, result));
             throw ex;
         }
     }
@@ -150,12 +163,26 @@ public class AiResumeServiceImpl implements AiResumeService {
         creditService.ensureSufficient(user.userId(), CREDIT_COST_RESUME_OPTIMIZE);
 
         LlmResult result = null;
+        long startedAt = System.nanoTime();
         try {
             result = deepSeekClient.chatWithUsage(prompt);
             LlmJsonParser.ParsedResumeOptimize parsed = llmJsonParser.parseResumeOptimize(result.content());
             LlmResult successResult = result;
 
             return transactionTemplate.execute(status -> {
+                ResumeOptimize optimize = new ResumeOptimize();
+                optimize.setResumeId(resume.getId());
+                optimize.setTargetDirection(targetDirection);
+                optimize.setSummary(parsed.summary());
+                optimize.setOptimizedBullets(llmJsonParser.toJson(parsed.optimizedBullets()));
+                optimize.setRewriteSuggestions(llmJsonParser.toJson(parsed.rewriteSuggestions()));
+                optimize.setLlmModel(successResult.model());
+                optimize.setPromptTokens(successResult.promptTokens());
+                optimize.setCompletionTokens(successResult.completionTokens());
+                optimize.setTotalTokens(successResult.totalTokens());
+                optimize.setLatencyMs(successResult.latencyMs());
+                resumeOptimizeMapper.insert(optimize);
+
                 Long logId = llmCallLogService.recordSuccess(user.userId(), OPERATION_RESUME_OPTIMIZE, successResult);
                 creditService.charge(
                         user.userId(),
@@ -166,6 +193,7 @@ public class AiResumeServiceImpl implements AiResumeService {
                         "resume optimize"
                 );
                 llmCallLogService.updateCreditCost(logId, CREDIT_COST_RESUME_OPTIMIZE);
+                llmMetrics.recordSuccess(OPERATION_RESUME_OPTIMIZE, successResult);
                 return new ResumeOptimizeVO(
                         parsed.summary(),
                         parsed.optimizedBullets(),
@@ -179,6 +207,7 @@ public class AiResumeServiceImpl implements AiResumeService {
             });
         } catch (RuntimeException ex) {
             safeRecordFailure(user.userId(), OPERATION_RESUME_OPTIMIZE, result, ex);
+            llmMetrics.recordFailure(OPERATION_RESUME_OPTIMIZE, failureModel(result), failureLatencyMs(startedAt, result));
             throw ex;
         }
     }
@@ -192,6 +221,7 @@ public class AiResumeServiceImpl implements AiResumeService {
         creditService.ensureSufficient(user.userId(), CREDIT_COST_JOB_MATCH);
 
         LlmResult result = null;
+        long startedAt = System.nanoTime();
         try {
             result = deepSeekClient.chatWithUsage(prompt);
             LlmJsonParser.ParsedJobMatch parsed = llmJsonParser.parseJobMatch(result.content());
@@ -217,6 +247,7 @@ public class AiResumeServiceImpl implements AiResumeService {
                         "job match"
                 );
                 llmCallLogService.updateCreditCost(logId, CREDIT_COST_JOB_MATCH);
+                llmMetrics.recordSuccess(OPERATION_JOB_MATCH, successResult);
 
                 JobMatch saved = jobMatchMapper.selectById(match.getId());
                 return new JobMatchVO(
@@ -232,8 +263,17 @@ public class AiResumeServiceImpl implements AiResumeService {
             });
         } catch (RuntimeException ex) {
             safeRecordFailure(user.userId(), OPERATION_JOB_MATCH, result, ex);
+            llmMetrics.recordFailure(OPERATION_JOB_MATCH, failureModel(result), failureLatencyMs(startedAt, result));
             throw ex;
         }
+    }
+
+    private String failureModel(LlmResult result) {
+        return result != null ? result.model() : llmProperties.model();
+    }
+
+    private long failureLatencyMs(long startedAt, LlmResult result) {
+        return result != null ? result.latencyMs() : TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 
     private void safeRecordFailure(Long userId, String operation, LlmResult result, RuntimeException ex) {

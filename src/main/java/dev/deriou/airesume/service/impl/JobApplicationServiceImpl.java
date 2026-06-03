@@ -215,6 +215,7 @@ public class JobApplicationServiceImpl implements JobApplicationService {
                 application.getUserId(),
                 application.getResumeId(),
                 resume != null ? resume.getTitle() : null,
+                resume != null ? resume.getContentMd() : null,
                 application.getJobId(),
                 job != null ? job.getTitle() : null,
                 application.getStatus(),

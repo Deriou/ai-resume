@@ -1,0 +1,15 @@
+.git
+.idea
+.vscode
+.DS_Store
+.env
+.env.*
+docs-draft
+monitoring
+uploads
+target
+web/node_modules
+web/dist
+web/.vite
+**/target
+**/.DS_Store

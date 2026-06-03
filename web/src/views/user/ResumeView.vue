@@ -1,14 +1,31 @@
 <script setup lang="ts">
+import {
+  Clock,
+  Delete,
+  Document,
+  Edit,
+  Folder,
+  MagicStick,
+  TrendCharts,
+} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type UploadUserFile } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { optimizeResume, scoreResume } from '@/api/ai'
-import { fetchCheckInStatus, fetchCreditBalance } from '@/api/credit'
-import { createResume, deleteResume, importPdfResume, listResumes, updateResume } from '@/api/resume'
+import { fetchCreditBalance } from '@/api/credit'
+import {
+  createResume,
+  deleteResume,
+  importPdfResume,
+  listLatestResumeScores,
+  listResumeOptimizations,
+  listResumes,
+  updateResume,
+} from '@/api/resume'
 import OptimizeResultDrawer from '@/components/ai/OptimizeResultDrawer.vue'
 import ScoreResultDialog from '@/components/ai/ScoreResultDialog.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
-import StatCard from '@/components/common/StatCard.vue'
 import TargetDirectionSelect from '@/components/common/TargetDirectionSelect.vue'
 import ResumeFileManager from '@/components/resume/ResumeFileManager.vue'
 import {
@@ -18,17 +35,34 @@ import {
   RESUME_HIGHLIGHTS,
 } from '@/constants/resumeTemplates'
 import { useAuthStore } from '@/stores/auth'
-import type { ResumeOptimizeVO, ResumeScoreVO } from '@/types/ai'
+import type { ResumeOptimizeRecordVO, ResumeOptimizeVO, ResumeScoreSummaryVO, ResumeScoreVO } from '@/types/ai'
 import type { ResumeVO } from '@/types/resume'
 import { formatDateTime } from '@/utils/format'
 
 const auth = useAuthStore()
 const loading = ref(false)
 const resumes = ref<ResumeVO[]>([])
+const scores = ref<ResumeScoreSummaryVO[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = ref(10)
-const checkedIn = ref(false)
+const pageSize = ref(9)
+
+const scoreMap = computed(() => {
+  const map = new Map<number, ResumeScoreSummaryVO>()
+  scores.value.forEach((s) => map.set(s.resumeId, s))
+  return map
+})
+
+function scoreTone(score: number): 'green' | 'orange' | 'red' {
+  if (score >= 85) return 'green'
+  if (score >= 70) return 'orange'
+  return 'red'
+}
+
+const historyVisible = ref(false)
+const historyLoading = ref(false)
+const historyResume = ref<ResumeVO | null>(null)
+const historyRecords = ref<ResumeOptimizeRecordVO[]>([])
 
 const editVisible = ref(false)
 const editLoading = ref(false)
@@ -98,19 +132,33 @@ const templateMarkdown = computed(() => {
 })
 
 async function loadStats() {
-  const [balance, checkStatus] = await Promise.all([fetchCreditBalance(), fetchCheckInStatus()])
+  const balance = await fetchCreditBalance()
   auth.updateCreditBalance(balance.balance)
-  checkedIn.value = checkStatus.checkedIn
+}
+
+async function loadScores() {
+  scores.value = await listLatestResumeScores()
 }
 
 async function loadData() {
   loading.value = true
   try {
-    const data = await listResumes(page.value, pageSize.value)
+    const [data] = await Promise.all([listResumes(page.value, pageSize.value), loadScores()])
     resumes.value = data.records
     total.value = data.total
   } finally {
     loading.value = false
+  }
+}
+
+async function openHistory(row: ResumeVO) {
+  historyResume.value = row
+  historyVisible.value = true
+  historyLoading.value = true
+  try {
+    historyRecords.value = await listResumeOptimizations(row.id)
+  } finally {
+    historyLoading.value = false
   }
 }
 
@@ -217,6 +265,7 @@ async function submitAi() {
     if (aiMode.value === 'score') {
       scoreResult.value = await scoreResume(aiResume.value.id, { targetDirection: targetDirection.value })
       scoreVisible.value = true
+      await loadScores()
     } else {
       optimizeResult.value = await optimizeResume(aiResume.value.id, { targetDirection: targetDirection.value })
       optimizeVisible.value = true
@@ -241,42 +290,60 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <div class="stat-grid">
-      <StatCard label="简历数量" :value="total" caption="支持 Markdown / 纯文本" />
-      <StatCard label="AI 币余额" :value="auth.creditBalance ?? 0" caption="评分 1 币，优化 2 币" />
-      <StatCard label="今日签到" :value="checkedIn ? '已签到' : '未签到'" caption="可在 AI 币中心领取" />
-      <StatCard label="附件规则" value="3 个" caption="PDF / DOC / DOCX，单文件 10MB" />
-    </div>
+    <div v-loading="loading">
+      <div v-if="resumes.length" class="resume-grid">
+        <article v-for="resume in resumes" :key="resume.id" class="resume-card surface-card is-hoverable">
+          <div class="card-top">
+            <div class="card-icon icon-badge"><el-icon><Document /></el-icon></div>
+            <span
+              v-if="scoreMap.get(resume.id)"
+              class="app-chip"
+              :class="{
+                'app-chip--success': scoreTone(scoreMap.get(resume.id)!.overallScore) === 'green',
+                'app-chip--warning': scoreTone(scoreMap.get(resume.id)!.overallScore) !== 'green',
+              }"
+            >
+              <el-icon><MagicStick /></el-icon> AI 评分 {{ scoreMap.get(resume.id)!.overallScore }}
+            </span>
+            <span v-else class="app-chip app-chip--soft">未评分</span>
+          </div>
 
-    <el-card shadow="never">
-      <el-table v-loading="loading" :data="resumes" empty-text="暂无简历，请先新建">
-        <el-table-column prop="title" label="简历标题" min-width="220" />
-        <el-table-column label="更新时间" width="180">
-          <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
-        </el-table-column>
-        <el-table-column label="创建时间" width="180">
-          <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="360" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="primary" @click="openFiles(row)">附件</el-button>
-            <el-button link type="primary" @click="openAi(row, 'score')">AI 评分</el-button>
-            <el-button link type="primary" @click="openAi(row, 'optimize')">AI 优化</el-button>
-            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div class="toolbar" style="justify-content: flex-end; margin-top: 16px">
+          <h3 class="card-title">{{ resume.title }}</h3>
+          <div class="card-time muted">更新于 {{ formatDateTime(resume.updatedAt) }}</div>
+
+          <el-button class="is-ai card-cta" :icon="MagicStick" @click="openAi(resume, 'optimize')">AI 润色</el-button>
+
+          <div class="card-actions">
+            <el-tooltip content="编辑" placement="top">
+              <button class="act-btn" @click="openEdit(resume)"><el-icon><Edit /></el-icon></button>
+            </el-tooltip>
+            <el-tooltip content="AI 评分" placement="top">
+              <button class="act-btn" @click="openAi(resume, 'score')"><el-icon><TrendCharts /></el-icon></button>
+            </el-tooltip>
+            <el-tooltip content="润色历史" placement="top">
+              <button class="act-btn" @click="openHistory(resume)"><el-icon><Clock /></el-icon></button>
+            </el-tooltip>
+            <el-tooltip content="附件" placement="top">
+              <button class="act-btn" @click="openFiles(resume)"><el-icon><Folder /></el-icon></button>
+            </el-tooltip>
+            <el-tooltip content="删除" placement="top">
+              <button class="act-btn danger" @click="handleDelete(resume)"><el-icon><Delete /></el-icon></button>
+            </el-tooltip>
+          </div>
+        </article>
+      </div>
+      <EmptyState v-else title="还没有简历" description="点击右上角「新建简历」，按模板或导入 PDF 创建。" />
+
+      <div v-if="total > pageSize" class="pager">
         <el-pagination
           v-model:current-page="page"
-          v-model:page-size="pageSize"
+          :page-size="pageSize"
           layout="total, prev, pager, next"
           :total="total"
           @current-change="loadData"
         />
       </div>
-    </el-card>
+    </div>
 
     <el-dialog v-model="editVisible" :title="editingId ? '编辑简历' : '新建简历'" width="980px" destroy-on-close>
       <template v-if="editingId">
@@ -417,10 +484,175 @@ onMounted(async () => {
 
     <ScoreResultDialog v-model:visible="scoreVisible" :result="scoreResult" />
     <OptimizeResultDrawer v-model:visible="optimizeVisible" :result="optimizeResult" />
+
+    <el-drawer v-model="historyVisible" :title="`润色历史：${historyResume?.title || ''}`" size="560px">
+      <div v-loading="historyLoading">
+        <div v-if="historyRecords.length" class="history-list">
+          <article v-for="record in historyRecords" :key="record.id" class="history-card surface-card">
+            <div class="history-head">
+              <span class="app-chip app-chip--ai">{{ record.targetDirection }}</span>
+              <span class="muted history-time">{{ formatDateTime(record.createdAt) }}</span>
+            </div>
+            <p class="history-summary">{{ record.summary }}</p>
+            <div v-if="record.optimizedBullets.length" class="history-block">
+              <strong>可替换表达</strong>
+              <ul>
+                <li v-for="item in record.optimizedBullets" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+            <div v-if="record.rewriteSuggestions.length" class="history-block">
+              <strong>改写方向</strong>
+              <ul>
+                <li v-for="item in record.rewriteSuggestions" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+            <div class="muted history-meta">{{ record.llmModel }} · {{ record.totalTokens }} tokens · {{ record.latencyMs }}ms</div>
+          </article>
+        </div>
+        <EmptyState v-else title="暂无润色记录" description="对这份简历点击「AI 润色」后，结果会自动保存在这里。" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <style scoped>
+.resume-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.resume-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-icon {
+  font-size: 20px;
+}
+
+.card-title {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-time {
+  font-size: 12px;
+}
+
+.card-cta {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.card-actions {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--app-surface-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.act-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 10px;
+  background: var(--app-surface-soft);
+  color: #5a6c82;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.act-btn:hover {
+  background: var(--brand-50);
+  color: var(--brand-600);
+}
+
+.act-btn.danger:hover {
+  background: rgba(226, 61, 75, 0.1);
+  color: var(--app-danger);
+}
+
+.pager {
+  margin-top: 22px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.history-card {
+  padding: 16px;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.history-time {
+  font-size: 12px;
+}
+
+.history-summary {
+  margin: 0 0 12px;
+  line-height: 1.7;
+  color: #3a4a5e;
+}
+
+.history-block {
+  margin-bottom: 10px;
+}
+
+.history-block strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--app-text);
+}
+
+.history-block ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.history-block li {
+  line-height: 1.7;
+  font-size: 13px;
+  color: #44566c;
+}
+
+.history-meta {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--app-border);
+  font-size: 12px;
+}
+
 .create-tabs {
   margin-top: -8px;
 }

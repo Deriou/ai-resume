@@ -51,3 +51,24 @@ export interface JobMatchVO {
   suggestions: string[]
   createdAt: string
 }
+
+export interface ResumeScoreSummaryVO {
+  resumeId: number
+  targetDirection: string
+  overallScore: number
+  suggestions: string[]
+  scoredAt: string
+}
+
+export interface ResumeOptimizeRecordVO {
+  id: number
+  resumeId: number
+  targetDirection: string
+  summary: string
+  optimizedBullets: string[]
+  rewriteSuggestions: string[]
+  llmModel: string
+  totalTokens: number
+  latencyMs: number
+  createdAt: string
+}

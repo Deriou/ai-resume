@@ -7,6 +7,7 @@ public record ApplicationVO(
         Long userId,
         Long resumeId,
         String resumeTitle,
+        String resumeContentMd,
         Long jobId,
         String jobTitle,
         String status,

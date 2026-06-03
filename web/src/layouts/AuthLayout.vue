@@ -1,23 +1,30 @@
 <template>
   <main class="auth-layout">
     <section class="brand-panel">
-      <div class="brand-mark">AiResume</div>
-      <h1>让简历优化、岗位匹配和 AI 成本治理变成一个完整业务闭环</h1>
-      <p>
-        面向求职者、企业和管理员的智能简历管理系统，覆盖登录认证、AI 调用、额度流水、投递审核和运营大盘。
-      </p>
-      <div class="brand-metrics">
-        <div>
-          <strong>3</strong>
-          <span>角色工作台</span>
+      <div class="brand-glow brand-glow-1" />
+      <div class="brand-glow brand-glow-2" />
+      <div class="brand-content">
+        <div class="brand-mark">
+          <span class="brand-logo">AR</span>
+          AiResume
         </div>
-        <div>
-          <strong>AI</strong>
-          <span>评分 / 优化 / 匹配</span>
-        </div>
-        <div>
-          <strong>Redis</strong>
-          <span>验证码 / 登录态 / 热点</span>
+        <h1>让简历优化、岗位匹配和 AI 成本治理<br />变成一个完整的业务闭环</h1>
+        <p>
+          面向求职者、企业和管理员的智能简历管理系统，覆盖登录认证、AI 调用、额度流水、投递审核和运营大盘。
+        </p>
+        <div class="brand-metrics">
+          <div>
+            <strong>3</strong>
+            <span>角色工作台</span>
+          </div>
+          <div>
+            <strong>AI</strong>
+            <span>评分 / 优化 / 匹配</span>
+          </div>
+          <div>
+            <strong>Redis</strong>
+            <span>验证码 / 登录态 / 热点</span>
+          </div>
         </div>
       </div>
     </section>
@@ -31,70 +38,115 @@
 .auth-layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(520px, 1fr) 520px;
-  background:
-    radial-gradient(circle at 15% 15%, rgba(37, 99, 235, 0.16), transparent 28%),
-    linear-gradient(135deg, #f7fbff 0%, #eef5ff 100%);
+  grid-template-columns: minmax(520px, 1fr) 540px;
+  background: linear-gradient(135deg, #f5f9fe 0%, #eaf2fb 100%);
 }
 
 .brand-panel {
+  position: relative;
+  overflow: hidden;
   padding: 72px 80px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background: linear-gradient(150deg, #0c4f8c 0%, #106ebe 48%, #1f8fd8 100%);
+  color: #fff;
+}
+
+.brand-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(10px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.brand-glow-1 {
+  width: 420px;
+  height: 420px;
+  top: -120px;
+  right: -100px;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.55), transparent 65%);
+}
+
+.brand-glow-2 {
+  width: 360px;
+  height: 360px;
+  bottom: -120px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(34, 184, 239, 0.5), transparent 65%);
+}
+
+.brand-content {
+  position: relative;
+  z-index: 1;
 }
 
 .brand-mark {
-  width: max-content;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: #0f172a;
-  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
+}
+
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
 }
 
 h1 {
-  margin: 28px 0 18px;
-  max-width: 720px;
-  font-size: 44px;
-  line-height: 1.15;
-  color: #102033;
+  margin: 32px 0 18px;
+  max-width: 760px;
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 p {
-  max-width: 620px;
+  max-width: 560px;
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.8;
-  color: #53637a;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .brand-metrics {
-  margin-top: 42px;
+  margin-top: 48px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 160px));
+  grid-template-columns: repeat(3, minmax(0, 168px));
   gap: 16px;
 }
 
 .brand-metrics div {
   padding: 18px;
-  border: 1px solid rgba(37, 99, 235, 0.14);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.76);
-  box-shadow: var(--app-shadow-soft);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
 }
 
 .brand-metrics strong {
   display: block;
+  font-family: var(--font-display);
   font-size: 24px;
-  color: var(--app-primary);
+  font-weight: 800;
 }
 
 .brand-metrics span {
   display: block;
   margin-top: 6px;
-  color: var(--app-text-muted);
+  color: rgba(255, 255, 255, 0.78);
   font-size: 13px;
 }
 
@@ -103,8 +155,6 @@ p {
   align-items: center;
   justify-content: center;
   padding: 48px;
-  background: rgba(255, 255, 255, 0.72);
-  border-left: 1px solid rgba(37, 99, 235, 0.12);
 }
 
 @media (max-width: 1100px) {

@@ -7,10 +7,12 @@ import dev.deriou.airesume.context.LoginUserSupport;
 import dev.deriou.airesume.service.AdminDashboardService;
 import dev.deriou.airesume.service.CreditService;
 import dev.deriou.airesume.vo.AdminApplicationVO;
+import dev.deriou.airesume.vo.AdminApplicationSummaryVO;
 import dev.deriou.airesume.vo.AdminCreditDailyVO;
 import dev.deriou.airesume.vo.AdminCreditSummaryVO;
 import dev.deriou.airesume.vo.AdminCreditTopUserVO;
 import dev.deriou.airesume.vo.AdminJobVO;
+import dev.deriou.airesume.vo.AdminJobSummaryVO;
 import dev.deriou.airesume.vo.AdminLlmDailyVO;
 import dev.deriou.airesume.vo.AdminLlmOperationVO;
 import dev.deriou.airesume.vo.AdminLlmSummaryVO;
@@ -285,6 +287,36 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     @Override
+    public AdminJobSummaryVO jobSummary() {
+        requireAdmin();
+        return jdbcTemplate.queryForObject("""
+                SELECT
+                  COUNT(*) AS job_count,
+                  COALESCE(SUM(CASE WHEN status = 'OPEN' THEN 1 ELSE 0 END), 0) AS open_job_count,
+                  COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END), 0) AS closed_job_count,
+                  (SELECT COUNT(*) FROM application) AS application_count,
+                  COALESCE(SUM(CASE WHEN app.application_count IS NULL OR app.application_count = 0 THEN 1 ELSE 0 END), 0) AS no_application_job_count
+                FROM job j
+                LEFT JOIN (
+                  SELECT job_id, COUNT(*) AS application_count
+                  FROM application
+                  GROUP BY job_id
+                ) app ON app.job_id = j.id
+                """, (rs, rowNum) -> {
+            long jobCount = rs.getLong("job_count");
+            long applicationCount = rs.getLong("application_count");
+            return new AdminJobSummaryVO(
+                    jobCount,
+                    rs.getLong("open_job_count"),
+                    rs.getLong("closed_job_count"),
+                    applicationCount,
+                    rs.getLong("no_application_job_count"),
+                    jobCount == 0 ? 0.0 : (double) applicationCount / jobCount
+            );
+        });
+    }
+
+    @Override
     public PageVO<AdminJobVO> jobs(long page, long size, String status, String keyword) {
         requireAdmin();
         long current = PageSupport.page(page);
@@ -312,6 +344,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 JOIN app_user e ON e.id = j.enterprise_id
                 LEFT JOIN application a ON a.job_id = j.id
                 """ + where + """
+
                 GROUP BY j.id, j.enterprise_id, e.nick_name, j.title, j.tech_stack, j.location, j.status, j.created_at, j.updated_at
                 ORDER BY j.updated_at DESC, j.id DESC
                 LIMIT ? OFFSET ?
@@ -328,6 +361,32 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 localDateTime(rs, "updated_at")
         ), listParams.toArray());
         return PageVO.of(records, current, pageSize, total, pages(total, pageSize));
+    }
+
+    @Override
+    public AdminApplicationSummaryVO applicationSummary() {
+        requireAdmin();
+        return jdbcTemplate.queryForObject("""
+                SELECT
+                  COUNT(*) AS application_count,
+                  COALESCE(SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END), 0) AS pending_count,
+                  COALESCE(SUM(CASE WHEN status = 'VIEWED' THEN 1 ELSE 0 END), 0) AS viewed_count,
+                  COALESCE(SUM(CASE WHEN status = 'ACCEPTED' THEN 1 ELSE 0 END), 0) AS accepted_count,
+                  COALESCE(SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END), 0) AS rejected_count
+                FROM application
+                """, (rs, rowNum) -> {
+            long applicationCount = rs.getLong("application_count");
+            long pendingCount = rs.getLong("pending_count");
+            long reviewedCount = applicationCount - pendingCount;
+            return new AdminApplicationSummaryVO(
+                    applicationCount,
+                    pendingCount,
+                    rs.getLong("viewed_count"),
+                    rs.getLong("accepted_count"),
+                    rs.getLong("rejected_count"),
+                    applicationCount == 0 ? 0.0 : (double) reviewedCount / applicationCount
+            );
+        });
     }
 
     @Override
@@ -373,6 +432,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 JOIN job j ON j.id = a.job_id
                 JOIN app_user e ON e.id = j.enterprise_id
                 """ + where + """
+
                 ORDER BY a.updated_at DESC, a.id DESC
                 LIMIT ? OFFSET ?
                 """, (rs, rowNum) -> new AdminApplicationVO(

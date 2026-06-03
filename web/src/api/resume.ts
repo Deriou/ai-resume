@@ -1,9 +1,18 @@
 import http from './http'
+import type { ResumeOptimizeRecordVO, ResumeScoreSummaryVO } from '@/types/ai'
 import type { PageVO } from '@/types/api'
 import type { ResumeCreateRequest, ResumeFileVO, ResumeUpdateRequest, ResumeVO } from '@/types/resume'
 
 export function listResumes(page = 1, size = 10) {
   return http.get<never, PageVO<ResumeVO>>('/resumes', { params: { page, size } })
+}
+
+export function listLatestResumeScores() {
+  return http.get<never, ResumeScoreSummaryVO[]>('/resumes/scores/latest')
+}
+
+export function listResumeOptimizations(resumeId: number) {
+  return http.get<never, ResumeOptimizeRecordVO[]>(`/resumes/${resumeId}/optimizations`)
 }
 
 export function getResume(id: number) {

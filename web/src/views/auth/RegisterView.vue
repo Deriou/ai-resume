@@ -53,6 +53,7 @@ onMounted(loadCaptcha)
 <template>
   <div class="auth-card">
     <div class="auth-title">
+      <span class="eyebrow">加入 AiResume</span>
       <h2>创建账号</h2>
       <p>管理员账号不开放前台注册</p>
     </div>
@@ -96,22 +97,35 @@ onMounted(loadCaptcha)
 <style scoped>
 .auth-card {
   width: 100%;
-  max-width: 420px;
-  padding: 30px;
+  max-width: 432px;
+  padding: 38px 36px;
   border: 1px solid var(--app-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: var(--app-shadow);
 }
 
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-500);
+}
+
 .auth-title h2 {
   margin: 0;
-  font-size: 26px;
-  color: #102033;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--app-text);
 }
 
 .auth-title p {
-  margin: 8px 0 24px;
+  margin: 8px 0 26px;
   color: var(--app-text-muted);
 }
 

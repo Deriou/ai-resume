@@ -1,27 +1,59 @@
 :root {
-  --el-color-primary: #2563eb;
-  --el-color-primary-dark-2: #1d4ed8;
-  --el-color-primary-light-3: #60a5fa;
-  --el-color-primary-light-5: #93c5fd;
-  --el-color-primary-light-7: #bfdbfe;
-  --el-color-primary-light-8: #dbeafe;
-  --el-color-primary-light-9: #eff6ff;
+  /* === Brand palette (vibrant azure #106EBE) === */
+  --brand-700: #0a4a7e;
+  --brand-600: #0c5896;
+  --brand-500: #106ebe;
+  --brand-400: #2b8ed6;
+  --brand-300: #5aa9e2;
+  --brand-100: #d6e8f8;
+  --brand-50: #eef5fc;
+  --accent-cyan: #22b8ef;
+  --accent-indigo: #4f46e5;
 
-  --app-bg: #f5f8ff;
-  --app-bg-strong: #eaf1ff;
+  /* Element Plus primary mapping */
+  --el-color-primary: #106ebe;
+  --el-color-primary-dark-2: #0c5896;
+  --el-color-primary-light-3: #4d96d2;
+  --el-color-primary-light-5: #88b9e2;
+  --el-color-primary-light-7: #c0d9f0;
+  --el-color-primary-light-8: #d6e6f5;
+  --el-color-primary-light-9: #eef5fc;
+
+  /* === Surfaces === */
+  --app-bg: #f3f7fc;
+  --app-bg-strong: #e7f0fa;
   --app-surface: #ffffff;
-  --app-surface-soft: #f8fbff;
-  --app-text: #0f172a;
-  --app-text-muted: #64748b;
-  --app-border: #dbe5f6;
-  --app-primary: #2563eb;
-  --app-primary-soft: #e8f1ff;
-  --app-success: #16a34a;
-  --app-warning: #d97706;
-  --app-danger: #dc2626;
-  --app-shadow: 0 18px 42px rgba(37, 99, 235, 0.1);
-  --app-shadow-soft: 0 10px 28px rgba(15, 23, 42, 0.06);
-  --app-radius: 10px;
+  --app-surface-soft: #f6faff;
+  --app-text: #0b1f33;
+  --app-text-muted: #647890;
+  --app-border: #e3ecf7;
+  --app-border-strong: #d2e0f0;
+  --app-primary: #106ebe;
+  --app-primary-soft: #eaf3fc;
+  --app-success: #15a97c;
+  --app-warning: #e08a00;
+  --app-danger: #e23d4b;
+
+  /* === Gradients === */
+  --brand-grad: linear-gradient(135deg, #1577cb 0%, #2b9ae6 100%);
+  --ai-grad: linear-gradient(135deg, #4f46e5 0%, #106ebe 52%, #22b8ef 100%);
+
+  /* === Elevation (blue-tinted, "floating card") === */
+  --app-shadow: 0 20px 46px rgba(16, 110, 190, 0.12);
+  --app-shadow-soft: 0 10px 28px rgba(16, 70, 130, 0.08);
+  --app-shadow-pop: 0 26px 60px rgba(16, 70, 130, 0.2);
+  --app-shadow-hover: 0 24px 52px rgba(16, 110, 190, 0.18);
+
+  /* === Shape === */
+  --app-radius: 16px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  /* === Typography === */
+  --font-display: "Plus Jakarta Sans", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-body: Inter, "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 html,
@@ -31,8 +63,18 @@ body,
   min-height: 100%;
   background: var(--app-bg);
   color: var(--app-text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Microsoft YaHei", sans-serif;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }
 
 * {

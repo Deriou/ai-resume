@@ -604,6 +604,88 @@ GET /api/resumes?page=1&size=10
 USER
 ```
 
+#### 简历最近评分列表
+
+```http
+GET /api/resumes/scores/latest
+```
+
+权限:
+
+```text
+USER, 只返回当前用户自己简历的评分
+```
+
+说明:
+
+```text
+返回当前用户每份简历的最近一次 AI 评分摘要, 供前端在简历卡片上展示评分 badge 和 AI 建议。
+数据来源于已落库的 resume_score 表, 不触发新的 DeepSeek 调用, 不扣 AI 币。
+每份简历只取最近一次评分 (按 createdAt 倒序, 再按 id 倒序去重)。
+从未评分的简历不会出现在列表中; 用户没有任何评分时返回空数组。
+suggestions 取该次评分落库的优化建议数组, 解析失败时返回空数组。
+```
+
+响应 data:
+
+```json
+[
+  {
+    "resumeId": 1,
+    "targetDirection": "运维开发实习",
+    "overallScore": 82,
+    "suggestions": [
+      "补充 Prometheus/Grafana 监控指标截图"
+    ],
+    "scoredAt": "2026-06-01T12:00:00"
+  }
+]
+```
+
+#### 简历润色历史列表
+
+```http
+GET /api/resumes/{id}/optimizations
+```
+
+权限:
+
+```text
+USER, 只能查看自己简历的润色历史
+```
+
+说明:
+
+```text
+返回某份简历全部 AI 润色 (优化) 历史记录, 按 createdAt 倒序, 再按 id 倒序。
+数据来源于 resume_optimize 表, 不触发新的 DeepSeek 调用, 不扣 AI 币。
+该接口只读历史, 不修改 resume.content_md。
+该简历从未润色时返回空数组。
+```
+
+响应 data:
+
+```json
+[
+  {
+    "id": 1,
+    "resumeId": 1,
+    "targetDirection": "运维开发实习",
+    "summary": "整体方向正确, 但需要强化指标化表达。",
+    "optimizedBullets": [
+      "使用 Docker Compose 搭建 MySQL/Redis 本地环境, 支撑登录态与业务数据调试。"
+    ],
+    "rewriteSuggestions": [
+      "将'了解 Redis'改为'使用 Redis 承载验证码、登录态和热点缓存'。"
+    ],
+    "llmModel": "deepseek-chat",
+    "totalTokens": 400,
+    "latencyMs": 1200,
+    "createdAt": "2026-06-01T12:00:00"
+  }
+]
+```
+
 #### 简历详情
 
 ```http
@@ -939,6 +1021,27 @@ ENTERPRISE
 
 ```text
 只返回投递到当前企业岗位的申请。
+返回字段包含 `resumeContentMd`, 企业可在审核前查看求职者投递的简历正文。
+```
+
+响应 records 示例:
+
+```json
+{
+  "id": 1,
+  "userId": 3,
+  "resumeId": 1,
+  "resumeTitle": "运维开发实习简历",
+  "resumeContentMd": "熟悉 Linux、Docker、Kubernetes、Spring Boot、Redis。",
+  "jobId": 1,
+  "jobTitle": "运维开发实习生",
+  "status": "PENDING",
+  "remark": "希望参与云原生和自动化方向实习。",
+  "reviewedBy": null,
+  "reviewedAt": null,
+  "createdAt": "2026-06-01T12:00:00",
+  "updatedAt": "2026-06-01T12:00:00"
+}
 ```
 
 #### 审核投递
@@ -1089,9 +1192,17 @@ USER, 只能优化自己的简历
 说明:
 
 ```text
-P3 不修改 resume.content_md。
-P3 不单独保存优化结果历史。
-只写 llm_call_log operation=RESUME_OPTIMIZE。
+不修改 resume.content_md, 优化结果只作为建议, 是否采纳由用户自行编辑简历。
+优化结果会落库到 resume_optimize 表, 保存润色历史, 可通过
+GET /api/resumes/{id}/optimizations 查看 (P5 起新增, 取代早期"不保存优化历史"的设定)。
+同时写 llm_call_log operation=RESUME_OPTIMIZE。
+```
+
+落库:
+
+```text
+resume_optimize
+llm_call_log operation=RESUME_OPTIMIZE
 ```
 
 ### 8.3 岗位匹配
@@ -1597,6 +1708,27 @@ POST /api/admin/users/{userId}/credits/grant
 
 ### 10.6 管理员岗位只读列表
 
+岗位运营摘要:
+
+```http
+GET /api/admin/jobs/summary
+```
+
+响应 data:
+
+```json
+{
+  "jobCount": 7,
+  "openJobCount": 5,
+  "closedJobCount": 2,
+  "applicationCount": 4,
+  "noApplicationJobCount": 4,
+  "avgApplicationsPerJob": 0.57
+}
+```
+
+岗位分页列表:
+
 ```http
 GET /api/admin/jobs?page=1&size=10&status=OPEN&keyword=运维
 ```
@@ -1619,6 +1751,27 @@ GET /api/admin/jobs?page=1&size=10&status=OPEN&keyword=运维
 ```
 
 ### 10.7 管理员投递只读列表
+
+投递漏斗摘要:
+
+```http
+GET /api/admin/applications/summary
+```
+
+响应 data:
+
+```json
+{
+  "applicationCount": 4,
+  "pendingCount": 1,
+  "viewedCount": 1,
+  "acceptedCount": 1,
+  "rejectedCount": 1,
+  "reviewedRate": 0.75
+}
+```
+
+投递分页列表:
 
 ```http
 GET /api/admin/applications?page=1&size=10&status=PENDING

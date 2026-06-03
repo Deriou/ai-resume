@@ -2,10 +2,12 @@ import http from './http'
 import type { ApplicationStatus, JobStatus, PageVO, UserRole, UserStatus } from '@/types/api'
 import type {
   AdminApplicationVO,
+  AdminApplicationSummaryVO,
   AdminCreditDailyVO,
   AdminCreditGrantRequest,
   AdminCreditTopUserVO,
   AdminJobVO,
+  AdminJobSummaryVO,
   AdminLlmDailyVO,
   AdminLlmOperationVO,
   AdminOverviewVO,
@@ -49,6 +51,14 @@ export function grantUserCredit(userId: number, data: AdminCreditGrantRequest) {
 
 export function fetchAdminJobs(page = 1, size = 10, status?: JobStatus, keyword?: string) {
   return http.get<never, PageVO<AdminJobVO>>('/admin/jobs', { params: { page, size, status, keyword } })
+}
+
+export function fetchAdminJobSummary() {
+  return http.get<never, AdminJobSummaryVO>('/admin/jobs/summary')
+}
+
+export function fetchAdminApplicationSummary() {
+  return http.get<never, AdminApplicationSummaryVO>('/admin/applications/summary')
 }
 
 export function fetchAdminApplications(page = 1, size = 10, status?: ApplicationStatus) {

@@ -12,6 +12,8 @@
 | 前端 Vite | `http://localhost:5173` |
 | MySQL Docker 映射端口 | `127.0.0.1:3307` |
 | Redis Docker 映射端口 | `127.0.0.1:6380` |
+| Prometheus P6 可观测性 | `http://localhost:9090` |
+| Grafana P6 可观测性 | `http://localhost:3001` |
 
 ### 1.2 数据库账号
 
@@ -601,3 +603,155 @@ ai-resume-redis
 ```
 
 如果后续 P7 做上云或本地容器化前后端, 再新增 backend / frontend Dockerfile 和 compose 服务。
+
+## 16. P6 本地可观测性
+
+P6 只做最小可演示闭环:
+
+```text
+Spring Boot /actuator/prometheus
+  -> Prometheus
+  -> Grafana
+```
+
+### 16.1 启动监控
+
+先启动业务依赖和后端:
+
+```bash
+docker compose up -d
+./mvnw spring-boot:run
+```
+
+再启动 Prometheus 和 Grafana:
+
+```bash
+docker compose -f compose.monitoring.yaml up -d
+```
+
+访问:
+
+```text
+Prometheus: http://localhost:9090
+Grafana:    http://localhost:3001
+```
+
+Grafana 默认账号:
+
+```text
+admin / admin
+```
+
+首次登录如果 Grafana 要求修改密码, 按页面提示修改即可。P6 已预置 Prometheus 数据源和 Dashboard, 登录后进入:
+
+```text
+Dashboards -> AiResume -> AiResume LLM Observability
+```
+
+### 16.2 验证指标
+
+验证 Actuator:
+
+```bash
+curl http://localhost:8080/actuator/prometheus
+```
+
+基础指标应包含:
+
+```text
+http_server_requests_seconds
+jvm_memory_used_bytes
+```
+
+执行 AI 评分 / 优化 / 匹配后, 应包含:
+
+```text
+airesume_llm_calls_total
+airesume_llm_tokens_total
+airesume_llm_latency_seconds
+```
+
+Prometheus targets 页面:
+
+```text
+http://localhost:9090/targets
+```
+
+预期:
+
+```text
+ai-resume-backend UP
+```
+
+### 16.3 Grafana Dashboard
+
+本地 Grafana 会自动加载:
+
+```text
+AiResume LLM Observability
+```
+
+包含:
+
+- AI 调用总数。
+- Token 总消耗。
+- 平均耗时。
+- 成功 / 失败次数。
+- 各功能调用量。
+- 调用速率趋势。
+
+如果 Dashboard 没出现, 重新加载监控 compose:
+
+```bash
+docker compose -f compose.monitoring.yaml up -d
+```
+
+### 16.4 Grafana PromQL 示例
+
+AI 调用量:
+
+```promql
+sum by (operation) (rate(airesume_llm_calls_total[5m]))
+```
+
+成功 / 失败趋势:
+
+```promql
+sum by (status) (rate(airesume_llm_calls_total[5m]))
+```
+
+Token 消耗:
+
+```promql
+sum by (operation) (rate(airesume_llm_tokens_total{type="total"}[5m]))
+```
+
+平均耗时:
+
+```promql
+sum by (operation) (rate(airesume_llm_latency_seconds_sum[5m]))
+/
+sum by (operation) (rate(airesume_llm_latency_seconds_count[5m]))
+```
+
+JVM 内存:
+
+```promql
+sum by (area) (jvm_memory_used_bytes)
+```
+
+HTTP 请求量:
+
+```promql
+sum by (uri, method) (rate(http_server_requests_seconds_count[5m]))
+```
+
+### 16.5 P7 上云复用方式
+
+P7 不新增第二套 Prometheus / Grafana。后端镜像继续暴露:
+
+```text
+/actuator/prometheus
+```
+
+云上复用 Cloud-Ops-Hub 已有 Prometheus 抓取 AiResume 后端服务, 再在现有 Grafana 中导入或重建同样的面板。

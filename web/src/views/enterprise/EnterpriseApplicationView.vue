@@ -14,6 +14,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
 const reviewVisible = ref(false)
+const resumeVisible = ref(false)
 const reviewLoading = ref(false)
 const current = ref<ApplicationVO | null>(null)
 const reviewForm = reactive<{ status: Exclude<ApplicationStatus, 'PENDING'>; remark: string }>({
@@ -37,6 +38,11 @@ function openReview(row: ApplicationVO, status: Exclude<ApplicationStatus, 'PEND
   reviewForm.status = status
   reviewForm.remark = row.remark || ''
   reviewVisible.value = true
+}
+
+function openResume(row: ApplicationVO) {
+  current.value = row
+  resumeVisible.value = true
 }
 
 async function submitReview() {
@@ -76,6 +82,7 @@ onMounted(loadData)
         </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" @click="openResume(row)">查看简历</el-button>
             <el-button link type="primary" :disabled="row.status !== 'PENDING'" @click="openReview(row, 'VIEWED')">
               已查看
             </el-button>
@@ -127,5 +134,34 @@ onMounted(loadData)
         <el-button type="primary" :loading="reviewLoading" @click="submitReview">确认</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="resumeVisible" :title="current?.resumeTitle || '简历详情'" width="760px">
+      <div class="resume-preview">
+        <pre>{{ current?.resumeContentMd || '暂无简历正文' }}</pre>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="resumeVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.resume-preview {
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  padding: 16px;
+}
+
+.resume-preview pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  line-height: 1.7;
+  color: var(--el-text-color-primary);
+}
+</style>

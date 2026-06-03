@@ -5,10 +5,12 @@ import dev.deriou.airesume.dto.AdminCreditGrantRequest;
 import dev.deriou.airesume.service.AdminDashboardService;
 import dev.deriou.airesume.service.AdminUserService;
 import dev.deriou.airesume.vo.AdminApplicationVO;
+import dev.deriou.airesume.vo.AdminApplicationSummaryVO;
 import dev.deriou.airesume.vo.AdminCreditDailyVO;
 import dev.deriou.airesume.vo.AdminCreditSummaryVO;
 import dev.deriou.airesume.vo.AdminCreditTopUserVO;
 import dev.deriou.airesume.vo.AdminJobVO;
+import dev.deriou.airesume.vo.AdminJobSummaryVO;
 import dev.deriou.airesume.vo.AdminLlmDailyVO;
 import dev.deriou.airesume.vo.AdminLlmOperationVO;
 import dev.deriou.airesume.vo.AdminLlmSummaryVO;
@@ -102,6 +104,16 @@ public class AdminController {
             @RequestParam(required = false) String keyword
     ) {
         return ApiResponse.success(dashboardService.jobs(page, size, status, keyword));
+    }
+
+    @GetMapping("/jobs/summary")
+    public ApiResponse<AdminJobSummaryVO> jobSummary() {
+        return ApiResponse.success(dashboardService.jobSummary());
+    }
+
+    @GetMapping("/applications/summary")
+    public ApiResponse<AdminApplicationSummaryVO> applicationSummary() {
+        return ApiResponse.success(dashboardService.applicationSummary());
     }
 
     @GetMapping("/applications")

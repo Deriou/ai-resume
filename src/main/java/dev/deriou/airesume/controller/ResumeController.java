@@ -5,8 +5,11 @@ import dev.deriou.airesume.dto.ResumeCreateRequest;
 import dev.deriou.airesume.dto.ResumeUpdateRequest;
 import dev.deriou.airesume.service.ResumeService;
 import dev.deriou.airesume.vo.PageVO;
+import dev.deriou.airesume.vo.ResumeOptimizeRecordVO;
+import dev.deriou.airesume.vo.ResumeScoreSummaryVO;
 import dev.deriou.airesume.vo.ResumeVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,6 +51,16 @@ public class ResumeController {
             @RequestParam(defaultValue = "10") long size
     ) {
         return ApiResponse.success(resumeService.listMine(page, size));
+    }
+
+    @GetMapping("/scores/latest")
+    public ApiResponse<List<ResumeScoreSummaryVO>> listLatestScores() {
+        return ApiResponse.success(resumeService.listLatestScores());
+    }
+
+    @GetMapping("/{id}/optimizations")
+    public ApiResponse<List<ResumeOptimizeRecordVO>> listOptimizations(@PathVariable Long id) {
+        return ApiResponse.success(resumeService.listOptimizations(id));
     }
 
     @GetMapping("/{id}")

@@ -5,6 +5,7 @@ export interface ApplicationVO {
   userId: number
   resumeId: number
   resumeTitle: string
+  resumeContentMd: string | null
   jobId: number
   jobTitle: string
   status: ApplicationStatus

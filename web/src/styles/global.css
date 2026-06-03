@@ -3,15 +3,18 @@ a {
   text-decoration: none;
 }
 
+/* ============================================================
+   Layout utilities
+   ============================================================ */
 .page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .section-card {
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius);
+  border-radius: var(--radius-lg);
   background: var(--app-surface);
   box-shadow: var(--app-shadow-soft);
 }
@@ -34,19 +37,25 @@ a {
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .two-column-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px;
 }
 
 .three-column-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
 }
 
 .muted {
@@ -67,24 +76,205 @@ a {
   color: #334155;
 }
 
+/* ============================================================
+   Reusable "SaaS" building blocks
+   ============================================================ */
+.gradient-text {
+  background: var(--ai-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Floating surface card with hover lift */
+.surface-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--app-shadow-soft);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.surface-card.is-hoverable:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--app-shadow-hover);
+  border-color: var(--brand-100);
+}
+
+/* Pill chip / tag */
+.app-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  background: var(--brand-50);
+  color: var(--brand-600);
+  white-space: nowrap;
+}
+
+.app-chip--soft {
+  background: #eef2f8;
+  color: #5a6c82;
+}
+
+.app-chip--success {
+  background: rgba(21, 169, 124, 0.12);
+  color: #0f7c5b;
+}
+
+.app-chip--warning {
+  background: rgba(224, 138, 0, 0.14);
+  color: #b06d00;
+}
+
+.app-chip--ai {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.12), rgba(34, 184, 239, 0.12));
+  color: var(--accent-indigo);
+}
+
+/* Soft icon badge */
+.icon-badge {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--brand-50);
+  color: var(--brand-500);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.icon-badge--ai {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.14), rgba(34, 184, 239, 0.16));
+  color: var(--accent-indigo);
+}
+
+/* ============================================================
+   Element Plus re-skin
+   ============================================================ */
+:root {
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+  --el-font-family: var(--font-body);
+}
+
 .el-card {
-  border-color: var(--app-border);
-  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--app-shadow-soft);
+  --el-card-padding: 22px;
 }
 
 .el-card__header {
+  font-family: var(--font-display);
   font-weight: 700;
+  font-size: 16px;
   color: var(--app-text);
+  border-bottom: 1px solid var(--app-surface-soft);
+  padding-bottom: 16px;
 }
 
+/* Buttons */
+.el-button {
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.el-button--large {
+  border-radius: 14px;
+}
+
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  background: var(--brand-grad);
+  border: none;
+  box-shadow: 0 10px 22px rgba(16, 110, 190, 0.26);
+}
+
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link):hover {
+  background: linear-gradient(135deg, #1268b0 0%, #2589d3 100%);
+  box-shadow: 0 14px 28px rgba(16, 110, 190, 0.34);
+}
+
+/* AI action button helper */
+.el-button.is-ai {
+  background: var(--ai-grad);
+  border: none;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.3);
+}
+
+.el-button.is-ai:hover {
+  filter: brightness(1.06);
+  color: #fff;
+}
+
+/* Tags as pills */
+.el-tag {
+  border-radius: var(--radius-pill);
+  border: none;
+  font-weight: 600;
+  padding: 0 11px;
+}
+
+/* Inputs */
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--app-border) inset;
+  transition: box-shadow 0.18s ease;
+}
+
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 2px var(--brand-400) inset, 0 0 0 4px rgba(16, 110, 190, 0.12);
+}
+
+/* Tables: airy, no heavy lines */
 .el-table {
-  --el-table-header-bg-color: #f8fbff;
-  --el-table-header-text-color: #334155;
+  --el-table-header-bg-color: #f4f8fd;
+  --el-table-header-text-color: #43586f;
+  --el-table-border-color: #eef3f9;
+  --el-table-row-hover-bg-color: #f4f9ff;
+  border-radius: var(--radius-md);
 }
 
+.el-table th.el-table__cell {
+  font-weight: 700;
+}
+
+/* Progress */
+.el-progress-bar__outer {
+  background: var(--brand-50);
+}
+
+.el-progress-bar__inner {
+  background: var(--brand-grad);
+}
+
+/* Dialogs / drawers */
 .el-dialog,
 .el-drawer {
-  --el-dialog-border-radius: 10px;
+  --el-dialog-border-radius: 20px;
+  border-radius: 20px;
+}
+
+.el-dialog__header {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.el-overlay-dialog .el-dialog {
+  box-shadow: var(--app-shadow-pop);
+}
+
+/* Menu active pill (shared layout) */
+.el-menu {
+  --el-menu-hover-bg-color: var(--brand-50);
 }
 
 @media (max-width: 1080px) {
@@ -94,6 +284,12 @@ a {
   }
 
   .two-column-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .stat-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -59,6 +59,23 @@ CREATE TABLE IF NOT EXISTS resume_score (
   INDEX idx_resume_score_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS resume_optimize (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  resume_id BIGINT NOT NULL,
+  target_direction VARCHAR(64) NOT NULL,
+  summary TEXT NULL,
+  optimized_bullets JSON NULL,
+  rewrite_suggestions JSON NULL,
+  llm_model VARCHAR(64) NOT NULL,
+  prompt_tokens INT NOT NULL DEFAULT 0,
+  completion_tokens INT NOT NULL DEFAULT 0,
+  total_tokens INT NOT NULL DEFAULT 0,
+  latency_ms BIGINT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_resume_optimize_resume_id (resume_id),
+  INDEX idx_resume_optimize_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS job (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   enterprise_id BIGINT NOT NULL,

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-resume-api
+  namespace: ai-resume
+  labels:
+    app: ai-resume-api
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: ai-resume-api
+  template:
+    metadata:
+      labels:
+        app: ai-resume-api
+    spec:
+      imagePullSecrets:
+        - name: acr-secret
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: ai-resume-uploads-pvc
+      containers:
+        - name: ai-resume-api
+          image: crpi-ekwujpeg6f954ar3.cn-wulanchabu.personal.cr.aliyuncs.com/cloud-ops-hub/ai-resume-api:manual
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: ai-resume-config
+          env:
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=70 -XX:+UseG1GC"
+            - name: DEEPSEEK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-resume-secret
+                  key: DEEPSEEK_API_KEY
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-resume-secret
+                  key: SPRING_DATASOURCE_PASSWORD
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-resume-secret
+                  key: SPRING_DATA_REDIS_PASSWORD
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          resources:
+            requests:
+              cpu: 100m
+              memory: 300Mi
+            limits:
+              cpu: 700m
+              memory: 640Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3

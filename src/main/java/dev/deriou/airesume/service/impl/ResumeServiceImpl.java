@@ -2,6 +2,8 @@ package dev.deriou.airesume.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.deriou.airesume.common.api.ResultCode;
 import dev.deriou.airesume.common.exception.BizException;
 import dev.deriou.airesume.common.pagination.PageSupport;
@@ -11,16 +13,27 @@ import dev.deriou.airesume.context.LoginUserSupport;
 import dev.deriou.airesume.dto.ResumeCreateRequest;
 import dev.deriou.airesume.dto.ResumeUpdateRequest;
 import dev.deriou.airesume.entity.Resume;
+import dev.deriou.airesume.entity.ResumeOptimize;
+import dev.deriou.airesume.entity.ResumeScore;
 import dev.deriou.airesume.mapper.ResumeMapper;
+import dev.deriou.airesume.mapper.ResumeOptimizeMapper;
+import dev.deriou.airesume.mapper.ResumeScoreMapper;
 import dev.deriou.airesume.service.ResumeFileService;
 import dev.deriou.airesume.service.ResumeService;
 import dev.deriou.airesume.vo.PageVO;
+import dev.deriou.airesume.vo.ResumeOptimizeRecordVO;
+import dev.deriou.airesume.vo.ResumeScoreSummaryVO;
 import dev.deriou.airesume.vo.ResumeVO;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -29,18 +42,32 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class ResumeServiceImpl implements ResumeService {
 
+    private static final Logger log = LoggerFactory.getLogger(ResumeServiceImpl.class);
+
+    private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {
+    };
+
     private final ResumeMapper resumeMapper;
+    private final ResumeScoreMapper resumeScoreMapper;
+    private final ResumeOptimizeMapper resumeOptimizeMapper;
     private final ResumeFileService resumeFileService;
     private final UploadProperties uploadProperties;
+    private final ObjectMapper objectMapper;
 
     public ResumeServiceImpl(
             ResumeMapper resumeMapper,
+            ResumeScoreMapper resumeScoreMapper,
+            ResumeOptimizeMapper resumeOptimizeMapper,
             ResumeFileService resumeFileService,
-            UploadProperties uploadProperties
+            UploadProperties uploadProperties,
+            ObjectMapper objectMapper
     ) {
         this.resumeMapper = resumeMapper;
+        this.resumeScoreMapper = resumeScoreMapper;
+        this.resumeOptimizeMapper = resumeOptimizeMapper;
         this.resumeFileService = resumeFileService;
         this.uploadProperties = uploadProperties;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -121,6 +148,81 @@ public class ResumeServiceImpl implements ResumeService {
             throw new BizException(ResultCode.BIZ_ERROR, "resume has files, please delete files first");
         }
         resumeMapper.deleteById(id);
+    }
+
+    @Override
+    public List<ResumeScoreSummaryVO> listLatestScores() {
+        LoginUser user = LoginUserSupport.requireRole(LoginUserSupport.ROLE_USER);
+        List<Long> resumeIds = resumeMapper.selectList(
+                        new LambdaQueryWrapper<Resume>()
+                                .select(Resume::getId)
+                                .eq(Resume::getUserId, user.userId()))
+                .stream()
+                .map(Resume::getId)
+                .toList();
+        if (resumeIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<ResumeScore> scores = resumeScoreMapper.selectList(
+                new LambdaQueryWrapper<ResumeScore>()
+                        .in(ResumeScore::getResumeId, resumeIds)
+                        .orderByDesc(ResumeScore::getCreatedAt)
+                        .orderByDesc(ResumeScore::getId));
+
+        Set<Long> seen = new LinkedHashSet<>();
+        List<ResumeScoreSummaryVO> summaries = new ArrayList<>();
+        for (ResumeScore score : scores) {
+            if (seen.add(score.getResumeId())) {
+                summaries.add(new ResumeScoreSummaryVO(
+                        score.getResumeId(),
+                        score.getTargetDirection(),
+                        score.getOverallScore(),
+                        parseStringList(score.getSuggestions()),
+                        score.getCreatedAt()));
+            }
+        }
+        return summaries;
+    }
+
+    @Override
+    public List<ResumeOptimizeRecordVO> listOptimizations(Long resumeId) {
+        LoginUser user = LoginUserSupport.requireRole(LoginUserSupport.ROLE_USER);
+        Resume resume = requireResume(resumeId);
+        ensureOwner(resume, user.userId());
+
+        List<ResumeOptimize> records = resumeOptimizeMapper.selectList(
+                new LambdaQueryWrapper<ResumeOptimize>()
+                        .eq(ResumeOptimize::getResumeId, resumeId)
+                        .orderByDesc(ResumeOptimize::getCreatedAt)
+                        .orderByDesc(ResumeOptimize::getId));
+
+        return records.stream()
+                .map(record -> new ResumeOptimizeRecordVO(
+                        record.getId(),
+                        record.getResumeId(),
+                        record.getTargetDirection(),
+                        record.getSummary(),
+                        parseStringList(record.getOptimizedBullets()),
+                        parseStringList(record.getRewriteSuggestions()),
+                        record.getLlmModel(),
+                        record.getTotalTokens(),
+                        record.getLatencyMs(),
+                        record.getCreatedAt()))
+                .toList();
+    }
+
+    private List<String> parseStringList(String json) {
+        if (!StringUtils.hasText(json)) {
+            return List.of();
+        }
+        try {
+            List<String> parsed = objectMapper.readValue(json, STRING_LIST);
+            return parsed == null ? List.of() : parsed;
+        } catch (Exception ex) {
+            log.warn("failed to parse resume optimize json", ex);
+            return List.of();
+        }
     }
 
     private Resume requireResume(Long id) {
