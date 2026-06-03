@@ -17,9 +17,11 @@ spec:
       labels:
         app: redis
     spec:
+      imagePullSecrets:
+        - name: acr-secret
       containers:
         - name: redis
-          image: redis:7.2-alpine
+          image: crpi-ekwujpeg6f954ar3.cn-wulanchabu.personal.cr.aliyuncs.com/cloud-ops-hub/redis:7.2-alpine
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 6379
