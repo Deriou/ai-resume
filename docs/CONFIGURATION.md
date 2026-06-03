@@ -120,13 +120,30 @@ P7 第一版使用单副本后端和 hostPath 静态 PV/PVC:
 
 该方案适合单节点 K3s 演示部署。后端不要扩展到多副本, 否则本地文件会出现一致性问题。
 
+PVC 含义:
+
+- PVC 是 Pod 向 Kubernetes 申请可挂载存储的声明。
+- 本项目的 PV 使用 hostPath, 所以数据实际存在 ECS 宿主机目录。
+- Pod 重建不会删除宿主机数据, 但如果以后扩成多节点, hostPath 数据不会自动跨节点迁移。
+- 如果进入更接近生产的部署, 建议替换为云盘、NFS、Longhorn 或 OSS/MinIO 等方案。
+
+Redis 当前资源:
+
+```text
+request: cpu 50m, memory 96Mi
+limit:   cpu 200m, memory 256Mi
+Redis maxmemory: 192mb
+```
+
 ## 域名与路由
 
 生产域名:
 
 ```text
-resume.deriou.com
+http://resume.deriou.com
 ```
+
+P7 当前是学习部署, 不启用 HTTPS/TLS。
 
 Ingress path:
 

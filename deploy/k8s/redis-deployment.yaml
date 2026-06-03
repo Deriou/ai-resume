@@ -37,7 +37,7 @@ spec:
             - >
               exec redis-server
               --appendonly yes
-              --maxmemory 128mb
+              --maxmemory 192mb
               --maxmemory-policy volatile-lru
               --requirepass "$REDIS_PASSWORD"
           volumeMounts:
@@ -46,10 +46,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 64Mi
+              memory: 96Mi
             limits:
               cpu: 200m
-              memory: 160Mi
+              memory: 256Mi
           readinessProbe:
             exec:
               command:
