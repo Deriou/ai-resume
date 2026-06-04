@@ -14,16 +14,16 @@
         </p>
         <div class="brand-metrics">
           <div>
-            <strong>3</strong>
-            <span>角色工作台</span>
+            <strong>智能评分</strong>
+            <span>一键诊断简历短板</span>
           </div>
           <div>
-            <strong>AI</strong>
-            <span>评分 / 优化 / 匹配</span>
+            <strong>定向优化</strong>
+            <span>AI 改写，贴合岗位 JD</span>
           </div>
           <div>
-            <strong>Redis</strong>
-            <span>验证码 / 登录态 / 热点</span>
+            <strong>岗位匹配</strong>
+            <span>量化匹配度，辅助投递</span>
           </div>
         </div>
       </div>

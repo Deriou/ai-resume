@@ -31,6 +31,10 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === 'blob') {
+      return response.data as never
+    }
+
     const payload = response.data as ApiResponse<unknown>
     if (payload?.code === 'OK') {
       return payload.data as never

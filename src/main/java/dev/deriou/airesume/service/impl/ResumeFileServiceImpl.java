@@ -6,8 +6,12 @@ import dev.deriou.airesume.common.exception.BizException;
 import dev.deriou.airesume.config.UploadProperties;
 import dev.deriou.airesume.context.LoginUser;
 import dev.deriou.airesume.context.LoginUserSupport;
+import dev.deriou.airesume.entity.Job;
+import dev.deriou.airesume.entity.JobApplication;
 import dev.deriou.airesume.entity.Resume;
 import dev.deriou.airesume.entity.ResumeFile;
+import dev.deriou.airesume.mapper.JobApplicationMapper;
+import dev.deriou.airesume.mapper.JobMapper;
 import dev.deriou.airesume.mapper.ResumeFileMapper;
 import dev.deriou.airesume.mapper.ResumeMapper;
 import dev.deriou.airesume.service.ResumeFileService;
@@ -47,15 +51,21 @@ public class ResumeFileServiceImpl implements ResumeFileService {
 
     private final ResumeFileMapper resumeFileMapper;
     private final ResumeMapper resumeMapper;
+    private final JobApplicationMapper applicationMapper;
+    private final JobMapper jobMapper;
     private final UploadProperties uploadProperties;
 
     public ResumeFileServiceImpl(
             ResumeFileMapper resumeFileMapper,
             ResumeMapper resumeMapper,
+            JobApplicationMapper applicationMapper,
+            JobMapper jobMapper,
             UploadProperties uploadProperties
     ) {
         this.resumeFileMapper = resumeFileMapper;
         this.resumeMapper = resumeMapper;
+        this.applicationMapper = applicationMapper;
+        this.jobMapper = jobMapper;
         this.uploadProperties = uploadProperties;
     }
 
@@ -122,8 +132,8 @@ public class ResumeFileServiceImpl implements ResumeFileService {
 
     @Override
     public DownloadFile getDownload(Long fileId) {
-        LoginUser user = LoginUserSupport.requireRole(LoginUserSupport.ROLE_USER);
-        ResumeFile resumeFile = requireOwnedResumeFile(fileId, user.userId());
+        LoginUser user = LoginUserSupport.currentUser();
+        ResumeFile resumeFile = requireDownloadableResumeFile(fileId, user);
         Path filePath = resolveStoragePath(resumeFile.getStoragePath());
         if (!Files.exists(filePath) || !Files.isReadable(filePath)) {
             throw new BizException(ResultCode.BIZ_ERROR, "file not found");
@@ -172,6 +182,42 @@ public class ResumeFileServiceImpl implements ResumeFileService {
             throw new BizException(ResultCode.FORBIDDEN, "file does not belong to current user");
         }
         return resumeFile;
+    }
+
+    private ResumeFile requireDownloadableResumeFile(Long fileId, LoginUser user) {
+        ResumeFile resumeFile = resumeFileMapper.selectById(fileId);
+        if (resumeFile == null) {
+            throw new BizException(ResultCode.BIZ_ERROR, "file not found");
+        }
+        if (LoginUserSupport.ROLE_USER.equals(user.role())) {
+            if (!user.userId().equals(resumeFile.getUserId())) {
+                throw new BizException(ResultCode.FORBIDDEN, "file does not belong to current user");
+            }
+            return resumeFile;
+        }
+        if (LoginUserSupport.ROLE_ENTERPRISE.equals(user.role())) {
+            ensureEnterpriseCanAccess(resumeFile, user.userId());
+            return resumeFile;
+        }
+        throw new BizException(ResultCode.FORBIDDEN, "resume file download is not allowed for current role");
+    }
+
+    private void ensureEnterpriseCanAccess(ResumeFile resumeFile, Long enterpriseId) {
+        List<JobApplication> applications = applicationMapper.selectList(new LambdaQueryWrapper<JobApplication>()
+                .eq(JobApplication::getResumeId, resumeFile.getResumeId()));
+        if (applications.isEmpty()) {
+            throw new BizException(ResultCode.FORBIDDEN, "resume file is not visible to current enterprise");
+        }
+        List<Long> jobIds = applications.stream()
+                .map(JobApplication::getJobId)
+                .distinct()
+                .toList();
+        boolean visible = jobMapper.selectCount(new LambdaQueryWrapper<Job>()
+                .in(Job::getId, jobIds)
+                .eq(Job::getEnterpriseId, enterpriseId)) > 0;
+        if (!visible) {
+            throw new BizException(ResultCode.FORBIDDEN, "resume file is not visible to current enterprise");
+        }
     }
 
     private void validateFile(MultipartFile file) {

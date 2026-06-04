@@ -12,13 +12,16 @@ import dev.deriou.airesume.dto.ApplicationReviewRequest;
 import dev.deriou.airesume.entity.Job;
 import dev.deriou.airesume.entity.JobApplication;
 import dev.deriou.airesume.entity.Resume;
+import dev.deriou.airesume.entity.ResumeFile;
 import dev.deriou.airesume.mapper.JobApplicationMapper;
 import dev.deriou.airesume.mapper.JobMapper;
+import dev.deriou.airesume.mapper.ResumeFileMapper;
 import dev.deriou.airesume.mapper.ResumeMapper;
 import dev.deriou.airesume.service.HotDataService;
 import dev.deriou.airesume.service.JobApplicationService;
 import dev.deriou.airesume.vo.ApplicationVO;
 import dev.deriou.airesume.vo.PageVO;
+import dev.deriou.airesume.vo.ResumeFileVO;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -40,17 +43,20 @@ public class JobApplicationServiceImpl implements JobApplicationService {
 
     private final JobApplicationMapper applicationMapper;
     private final ResumeMapper resumeMapper;
+    private final ResumeFileMapper resumeFileMapper;
     private final JobMapper jobMapper;
     private final HotDataService hotDataService;
 
     public JobApplicationServiceImpl(
             JobApplicationMapper applicationMapper,
             ResumeMapper resumeMapper,
+            ResumeFileMapper resumeFileMapper,
             JobMapper jobMapper,
             HotDataService hotDataService
     ) {
         this.applicationMapper = applicationMapper;
         this.resumeMapper = resumeMapper;
+        this.resumeFileMapper = resumeFileMapper;
         this.jobMapper = jobMapper;
         this.hotDataService = hotDataService;
     }
@@ -200,22 +206,29 @@ public class JobApplicationServiceImpl implements JobApplicationService {
                 .collect(Collectors.toMap(Resume::getId, Function.identity()));
         Map<Long, Job> jobs = jobMapper.selectBatchIds(jobIds).stream()
                 .collect(Collectors.toMap(Job::getId, Function.identity()));
+        Map<Long, List<ResumeFileVO>> filesByResumeId = listFilesByResumeIds(resumeIds);
         return applications.stream()
                 .map(application -> toVO(
                         application,
                         resumes.get(application.getResumeId()),
-                        jobs.get(application.getJobId())
+                        jobs.get(application.getJobId()),
+                        filesByResumeId.getOrDefault(application.getResumeId(), List.of())
                 ))
                 .toList();
     }
 
     private ApplicationVO toVO(JobApplication application, Resume resume, Job job) {
+        return toVO(application, resume, job, listFilesByResumeId(application.getResumeId()));
+    }
+
+    private ApplicationVO toVO(JobApplication application, Resume resume, Job job, List<ResumeFileVO> resumeFiles) {
         return new ApplicationVO(
                 application.getId(),
                 application.getUserId(),
                 application.getResumeId(),
                 resume != null ? resume.getTitle() : null,
                 resume != null ? resume.getContentMd() : null,
+                resumeFiles,
                 application.getJobId(),
                 job != null ? job.getTitle() : null,
                 application.getStatus(),
@@ -224,6 +237,41 @@ public class JobApplicationServiceImpl implements JobApplicationService {
                 application.getReviewedAt(),
                 application.getCreatedAt(),
                 application.getUpdatedAt()
+        );
+    }
+
+    private List<ResumeFileVO> listFilesByResumeId(Long resumeId) {
+        return resumeFileMapper.selectList(new LambdaQueryWrapper<ResumeFile>()
+                        .eq(ResumeFile::getResumeId, resumeId)
+                        .orderByDesc(ResumeFile::getCreatedAt)
+                        .orderByDesc(ResumeFile::getId))
+                .stream()
+                .map(this::toResumeFileVO)
+                .toList();
+    }
+
+    private Map<Long, List<ResumeFileVO>> listFilesByResumeIds(List<Long> resumeIds) {
+        if (resumeIds.isEmpty()) {
+            return Map.of();
+        }
+        return resumeFileMapper.selectList(new LambdaQueryWrapper<ResumeFile>()
+                        .in(ResumeFile::getResumeId, resumeIds)
+                        .orderByDesc(ResumeFile::getCreatedAt)
+                        .orderByDesc(ResumeFile::getId))
+                .stream()
+                .map(this::toResumeFileVO)
+                .collect(Collectors.groupingBy(ResumeFileVO::resumeId));
+    }
+
+    private ResumeFileVO toResumeFileVO(ResumeFile resumeFile) {
+        return new ResumeFileVO(
+                resumeFile.getId(),
+                resumeFile.getResumeId(),
+                resumeFile.getOriginalName(),
+                resumeFile.getContentType(),
+                resumeFile.getFileSize(),
+                resumeFile.getFileExt(),
+                resumeFile.getCreatedAt()
         );
     }
 

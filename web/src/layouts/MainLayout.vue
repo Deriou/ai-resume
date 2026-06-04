@@ -88,7 +88,6 @@ async function handleLogout() {
       <el-header class="topbar">
         <div>
           <div class="topbar-title">AiResume 工作台</div>
-          <div class="topbar-subtitle">真实接口联调模式，AI 调用默认走后端 DeepSeek</div>
         </div>
         <div class="topbar-actions">
           <el-button :icon="Refresh" circle plain @click="auth.fetchCurrentUser()" title="刷新数据" />
@@ -272,12 +271,6 @@ async function handleLogout() {
   font-weight: 800;
   font-size: 17px;
   color: var(--app-text);
-}
-
-.topbar-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--app-text-muted);
 }
 
 .topbar-actions {

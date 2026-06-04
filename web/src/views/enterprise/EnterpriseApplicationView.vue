@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 import { listReceivedApplications, reviewApplication } from '@/api/application'
+import { downloadResumeFile } from '@/api/resume'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import type { ApplicationStatus } from '@/types/api'
 import type { ApplicationVO } from '@/types/application'
-import { formatDateTime } from '@/utils/format'
+import type { ResumeFileVO } from '@/types/resume'
+import { formatDateTime, formatFileSize } from '@/utils/format'
 
 const loading = ref(false)
 const applications = ref<ApplicationVO[]>([])
@@ -43,6 +46,16 @@ function openReview(row: ApplicationVO, status: Exclude<ApplicationStatus, 'PEND
 function openResume(row: ApplicationVO) {
   current.value = row
   resumeVisible.value = true
+}
+
+async function handleDownload(row: ResumeFileVO) {
+  const blob = await downloadResumeFile(row.id)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = row.originalName
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 async function submitReview() {
@@ -135,9 +148,30 @@ onMounted(loadData)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="resumeVisible" :title="current?.resumeTitle || '简历详情'" width="760px">
+    <el-dialog v-model="resumeVisible" :title="current?.resumeTitle || '简历详情'" width="860px">
       <div class="resume-preview">
         <pre>{{ current?.resumeContentMd || '暂无简历正文' }}</pre>
+      </div>
+      <div class="resume-files">
+        <div class="resume-files__head">
+          <strong>简历附件</strong>
+          <span class="muted">{{ current?.resumeFiles?.length || 0 }} 个文件</span>
+        </div>
+        <el-table :data="current?.resumeFiles || []" empty-text="暂无附件">
+          <el-table-column prop="originalName" label="文件名" min-width="240" show-overflow-tooltip />
+          <el-table-column label="大小" width="110">
+            <template #default="{ row }">{{ formatFileSize(row.fileSize) }}</template>
+          </el-table-column>
+          <el-table-column prop="fileExt" label="类型" width="90" />
+          <el-table-column label="上传时间" width="170">
+            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" :icon="Download" @click="handleDownload(row)">下载</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
       <template #footer>
         <el-button type="primary" @click="resumeVisible = false">关闭</el-button>
@@ -163,5 +197,16 @@ onMounted(loadData)
   font-family: inherit;
   line-height: 1.7;
   color: var(--el-text-color-primary);
+}
+
+.resume-files {
+  margin-top: 16px;
+}
+
+.resume-files__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
 </style>
